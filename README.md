@@ -5,31 +5,35 @@ An automated system that monitors business metrics, detects unusual patterns, an
 ## Project Overview
 
 This project analyses real UK retail transaction data to automatically:
-- Calculate and track 15 business metrics (revenue, orders, customer behavior, etc.)
+- Calculate and track 16 business metrics (revenue, orders, customer behaviour, etc.)
 - Detect when metrics behave unusually using statistical methods
 - Figure out which customer segments or products are driving changes
 - Provide actionable explanations instead of just numbers
 
-**Why I built this:** I wanted to go beyond basic data analysis notebooks and build something that could actually run in production. Most analytics work involves repetitive calculations and manual investigation—this automates that process. Plus, I was curious about how companies like Amplitude or Mixpanel structure their metric systems under the hood.
+**Why I built this:** I wanted to go beyond basic data analysis notebooks and build something that could actually run in production. Most analytics work involves repetitive calculations and manual investigation, this automates that process. Plus, I was curious about how companies like Amplitude or Mixpanel structure their metric systems under the hood.
 
 ## Current Status
 
 **Phase:** Core Analytics Engine (Weeks 1-5)  
-**Progress:** Week 2 Complete  
-**Next Up:** KPI computation engine
+**Progress:** Week 3 Complete  
+**Next Up:** Statistical anomaly detection (Week 4)
 
 ### Completed:
-- Week 1: Project architecture and KPI specifications
-- Week 2: Data ingestion and validation pipeline
+- **Week 1:** Project architecture and KPI specifications
+- **Week 2:** Data ingestion and validation pipeline
   - Successfully loaded 541,909 transactions
   - Implemented 14 automated quality checks
   - Achieved 71.4% data quality score (10/14 checks passed)
   - Identified and documented 4 data anomalies
+- **Week 3:** KPI computation engine
+  - Built config-driven formula parser that reads metric definitions from YAML
+  - Implemented support for simple aggregations, cross-KPI dependencies, conditional filtering, and complex multi-step calculations
+  - All 16 KPIs calculating correctly across Finance, Operations, Growth, Product, and International categories
+  - Results saved with timestamps to `data/processed/kpi_results.csv`
 
 ### Currently Building:
--  KPI calculation engine (Week 3)
--  Statistical anomaly detection (Week 4)
--  Root cause analysis (Week 5)
+- Statistical anomaly detection (Week 4)
+- Root cause analysis (Week 5)
 
 ### Future Ideas (might add later):
 - AI-generated narrative summaries
@@ -37,6 +41,28 @@ This project analyses real UK retail transaction data to automatically:
 - Automated scheduling
 
 Note: I'm prioritising getting the core analytics engine working well before adding fancy features. Better to have 5 solid features than 8 half-baked ones.
+
+---
+
+## KPI Results (on 541,909 UK retail transactions)
+
+| Metric | Value |
+|---|---|
+| Total Revenue | £9,747,747.93 |
+| Revenue per Order | £376.36 |
+| Revenue per Customer | £2,229.59 |
+| Order Count | 25,900 |
+| Items per Order | 200 |
+| Units Sold | 5,176,450 |
+| Active Customers | 4,372 |
+| Repeat Customer Rate | ~83% |
+| New Customers | 4,372 |
+| Product Revenue Concentration | ~47% from top 20 products |
+| Avg Unit Price | £1.88 |
+| Product Return Rate | ~20% |
+| International Revenue Share | ~16% |
+| Weekend Revenue Share | ~8% |
+| Peak Hour Concentration | ~35% |
 
 ---
 
@@ -48,7 +74,7 @@ Initial data quality assessment revealed some interesting characteristics:
 
 **Passing Checks:**
 - Schema validation: All columns present with correct types
-- Completeness: CustomerID 24.9% missing (acceptable - represents guest checkouts)
+- Completeness: CustomerID 24.9% missing (acceptable — represents guest checkouts)
 - Completeness: Description 0.3% missing (well within threshold)
 - Cancellations properly marked with negative quantities
 
@@ -56,7 +82,7 @@ Initial data quality assessment revealed some interesting characteristics:
 - 2 transactions with negative unit prices (0.0004% of data)
 - 2 transactions exceeding £100K threshold (0.0004% of data)
 
-**Decision:** Proceeding with these anomalies documented rather than cleaned. In a real-world scenario, these would be flagged for business review (could be legitimate bulk orders or data entry errors requiring domain expertise to resolve). This demonstrates that the validation system works as intended—it catches edge cases for human review rather than silently accepting everything.
+**Decision:** Proceeding with these anomalies documented rather than cleaned. In a real-world scenario, these would be flagged for business review — they could be legitimate bulk orders or data entry errors requiring domain expertise to resolve. This demonstrates that the validation system works as intended: it catches edge cases for human review rather than silently accepting everything.
 
 ---
 
@@ -68,10 +94,10 @@ The system has 5 layers that work together:
 Data Layer (Week 2) 
   ↓ Loads and validates CSV data
   
-KPI Layer (Week 3) 
+KPI Layer (Week 3) completed
   ↓ Calculates metrics from config files
   
-Detection Layer (Week 4-5) 
+Detection Layer (Week 4) 
   ↓ Finds anomalies and trends statistically
   
 Analysis Layer (Week 5) 
@@ -81,31 +107,44 @@ Output Layer (Future)
   ↓ Presents findings to users
 ```
 
-**Design decision:** I'm using YAML config files to define metrics instead of hardcoding them. Initially I just had Python functions, but I kept having to modify code whenever I wanted to change a threshold or add a metric. This approach means I can tweak business logic without touching the codebase—which is how real analytics platforms work (learned this from reading about how dbt structures metric definitions).
+**Design decision:** Metrics are defined in YAML config files rather than hardcoded in Python. This means business logic (thresholds, formulas, owners) can be changed without touching the codebase — which is how real analytics platforms like dbt structure metric definitions.
+
+**How the formula parser works:** The KPI engine reads formula strings from `config/kpis.yaml` and executes them dynamically. It supports:
+- Simple aggregations: `sum(Quantity * UnitPrice)`
+- Cross-KPI references: `total_revenue / order_count` (uses previously calculated KPIs)
+- Conditional filtering: `sum(revenue where Country != 'United Kingdom')`
+- Complex multi-step calculations: top-N product/hour revenue aggregations
+- Customer groupby conditions: `count(distinct CustomerID with orders > 1)`
+
+---
 
 ## Project Structure
 
 ```
 ecommerce-data-storytelling/
 ├── config/
-│   ├── kpis.yaml                  # Metric definitions
-│   └── data_contracts.yaml        # Data validation rules
+│   ├── kpis.yaml                  # 16 metric definitions (formula, owner, thresholds)
+│   └── data_contracts.yaml        # Data validation rules and schema
 ├── src/
 │   ├── data/
-│   │   ├── ingestion.py          # CSV loading
-│   │   └── validation.py         # Quality checks
-│   ├── kpis/                      # Metric calculations
-│   ├── insights/                  # Anomaly detection
-│   ├── narratives/                # Text generation
-│   └── platform/                  # Dashboard
-├── tests/                         # Unit tests
+│   │   ├── ingestion.py          
+│   │   └── validation.py         
+│   ├── kpis/
+│   │   ├── formulas.py           
+│   │   ├── registry.py           
+│   │   └── engine.py             
+│   ├── insights/                  
+│   ├── narratives/                
+│   └── platform/                  
 ├── data/
-│   ├── raw/                       # Original CSV data
-│   ├── processed/                 # Cleaned data
-│   └── insights/                  # Generated analysis
-├── notebooks/                     # Exploration
-└── docs/                         # Documentation
+│   ├── raw/
+│   │   └── UK retail data.csv    541,909 rows
+│   └── processed/
+│       └── kpi_results.csv       
+└── README.md
 ```
+
+---
 
 ## Running the Code
 
@@ -125,17 +164,20 @@ source .venv/bin/activate     # Mac/Linux
 pip install -r requirements.txt
 ```
 
-### Running Data Pipeline
+### Running the Pipeline
 
 ```bash
-# Load and summarise data
+# 1. Load and summarise data
 python -m src.data.ingestion
 
-# Validate data quality
+# 2. Validate data quality
 python -m src.data.validation
+
+# 3. Calculate all 16 KPIs
+python -m src.kpis.engine
 ```
 
-**Note:** Do not run scripts directly (e.g., `python src/data/ingestion.py`) as this can cause import and path resolution errors. Always use the module syntax with `-m` flag.
+**Note:** Do not run scripts directly (e.g., `python src/data/ingestion.py`) as this causes import and path resolution errors. Always use the `-m` flag.
 
 ### Expected Output
 
@@ -143,8 +185,6 @@ python -m src.data.validation
 ```
 INFO: Loaded 541,909 rows and 8 columns
 Date range: 2010-12-01 to 2011-12-09
-Unique customers: 4,372
-Unique products: 4,070
 ```
 
 **Validation:**
@@ -154,6 +194,19 @@ Checks: 10/14 passed
 Recommendation: Review 4 anomalies for business context
 ```
 
+**KPI Engine:**
+```
+Successfully calculated 16/16 KPIs
+  total_revenue ..................... £9,747,747.93
+  order_count ....................... 25,900
+  active_customers .................. 4,372
+  repeat_customer_rate .............. 83.26%
+  international_revenue_share ....... 16.07%
+  ...
+```
+
+---
+
 ## Dataset
 
 Using real UK retail transaction data with:
@@ -161,223 +214,114 @@ Using real UK retail transaction data with:
 - **4,070 unique products** sold across **38 countries**
 - **4,372 unique customers** with purchase history
 
-**Columns:**
-- InvoiceNo, InvoiceDate, CustomerID, StockCode
-- Description, Quantity, UnitPrice, Country
+**Columns:** InvoiceNo, InvoiceDate, CustomerID, StockCode, Description, Quantity, UnitPrice, Country
 
-I picked this dataset because:
-- It's real business data (not synthetic), so it has actual messiness—missing CustomerIDs, negative quantities for returns, obvious outliers
-- Multiple dimensions to slice by (time, geography, products, customers)
-- Large enough to be interesting (500K+ rows) but runs fine on my laptop
-- Publicly available via UCI ML Repository, so reproducible
+I picked this dataset because it's real business data with actual messiness — missing CustomerIDs, negative quantities for returns, outliers — rather than a clean synthetic dataset. This makes it better for demonstrating data quality practices.
 
-The dataset has realistic quirks: 24.9% of transactions lack CustomerIDs (guest checkouts), returns are marked with negative quantities, and there are a handful of edge cases that would require business context to resolve. This makes it perfect for demonstrating data quality practices.
+Source: UCI ML Repository (Online Retail Dataset)
 
-## Metrics I'm Tracking
+---
 
-I defined 15 KPIs across different business areas:
+## Metrics Tracked
 
-**Revenue:**
-- Total revenue, revenue per order, revenue per customer
+16 KPIs across 5 business areas:
 
-**Volume:**
-- Order count, items per order, units sold
+**Finance:** total revenue, revenue per order, revenue per customer
 
-**Customers:**
-- Active customers, repeat rate, new customers
+**Operations:** order count, items per order, units sold, product return rate, weekend revenue share, peak hour concentration
 
-**Products:**
-- Product concentration, average price, return rate
+**Growth:** active customers, repeat customer rate, new customers
 
-**Geography:**
-- Revenue by country, international vs domestic split
+**Product:** product revenue concentration, avg unit price
 
-Each metric has:
-- **Owner** (who would care about it—Finance, Operations, etc.)
-- **Cadence** (daily or weekly)
-- **Thresholds** for detecting unusual behavior
+**International:** revenue by country, international revenue share
 
-Originally I just had 5 metrics, but after doing some EDA I realised you need different views for different stakeholders. Finance cares about total revenue, Operations cares about order volume, Product team wants basket size metrics. This mimics how actual companies organise their dashboards.
+Each metric has an owner (Finance, Operations, etc.), a cadence (daily or weekly), and anomaly detection thresholds for Week 4.
+
+---
 
 ## Development Plan
 
-### Week 1: Foundation (Completed)
-- Set up project structure
-- Define all metrics in config files
-- Document data validation rules
-- Plan architecture
+### Week 1: Foundation 
+Set up project structure, defined all 16 metrics in config files, documented data validation rules, planned architecture.
 
-Took longer than expected because I kept refactoring the folder structure. Finally settled on organising by layer (data, kpis, insights) rather than by feature.
+### Week 2: Data Pipeline 
+Built data loader with proper encoding (latin-1 for special characters), implemented 14 automated quality checks, achieved 71.4% data quality score with 4 documented anomalies.
 
-### Week 2: Data Pipeline (Completed)
-- Load CSV data with pandas
-- Validate against schema rules
-- Check data quality (completeness, outliers)
-- Handle missing values and errors
+### Week 3: KPI Computation Engine 
+Built a config-driven formula parser that executes metric definitions from YAML dynamically. The trickiest parts were handling cross-KPI dependencies (where one metric references another), conditional filtering (e.g. revenue from non-UK customers only), and complex aggregations like top-N product revenue that can't be expressed as simple formulas.
 
-**Achievements:**
-- Built reliable data loader with proper encoding (latin-1 for special characters)
-- Implemented 14 automated quality checks across 4 dimensions
-- Achieved 71.4% initial quality score with 4 documented anomalies
-- Proper error handling and logging throughout
+**Key challenge solved:** The formula parser needs to check ratio patterns (`/`) before aggregate patterns (`sum(`, `count(`) — otherwise `sum(Quantity) / order_count` gets partially consumed by the aggregate check and the division is ignored.
 
-**Lessons learned:** The importance of validating early. Found 2 negative prices and 2 extreme values that would have corrupted downstream analysis if not caught. Also learned that 25% of customers being "guests" (no CustomerID) is normal for retail—initially thought this was a data quality issue.
-
-### Week 3: Metric Calculation (Next)
-- Parse YAML config files
-- Calculate all 15 KPIs dynamically
-- Support daily/weekly aggregations
-- Make calculations reproducible
-
-Challenge: Figuring out how to parse formulas like "sum(Quantity * UnitPrice)" from YAML and execute them safely. Might use eval() with heavy sanitisation or build a simple expression parser.
-
-### Week 4: Anomaly Detection
-- Implement Z-score method
-- Add IQR (interquartile range) method
-- Detect trend changes (Mann-Kendall test)
-- Score confidence for each detection
-
-I want multiple detection methods because different approaches catch different types of anomalies. Z-score is good for sudden spikes, IQR handles outliers better, Mann-Kendall catches gradual trends.
+### Week 4: Anomaly Detection (Next)
+- Z-score method for sudden spikes
+- IQR for outlier-robust detection
+- Mann-Kendall test for gradual trend changes
+- Confidence scoring per detection
 
 ### Week 5: Root Cause Analysis
-- Automatically segment by dimensions
-- Calculate impact of each segment
-- Rank what's driving the change
-- Compare actual vs expected by segment
+Automatically segment anomalies by Country, Product, Customer dimensions to identify what's driving a change. Trying to avoid the "analyst manually slices data for 2 hours" problem.
 
-This is the most complex part—need to systematically check Country, Product, Customer segments, etc. to identify which combination explains the anomaly. Trying to avoid the "analyst manually slices data for 2 hours" problem.
+### Future (maybe)
+Streamlit dashboard, LLM-generated narrative summaries, scheduled runs with Prefect.
 
-### Future Enhancements (Phase 2)
-If I have time after finishing the core system:
-- Generate plain English summaries using templates (or experiment with LLMs if I can get API access)
-- Build a Streamlit dashboard to view insights interactively
-- Add ability to schedule daily runs with Prefect
-
-Realistically, I'll probably get through Week 5 and call it done. These are nice-to-haves but not essential for demonstrating the core capability.
+---
 
 ## Technical Approach
 
-What makes this different from typical student projects:
+**Config-Driven Design** — metrics defined in YAML, not Python. Business logic is separate from implementation. Inspired by how dbt handles metric definitions.
 
-**1. Config-Driven Design**
-- Metrics defined in YAML, not hardcoded in Python
-- Easy to modify without changing code
-- Separates business logic from implementation
-- Inspired by how tools like dbt handle metric definitions
+**Statistical Methods** — using actual statistical tests (Z-score, IQR, Mann-Kendall) with confidence scoring, not arbitrary hardcoded thresholds.
 
-**2. Statistical Methods**
-- Using actual statistical tests (Z-score, IQR, Mann-Kendall)
-- Not just arbitrary thresholds like "if revenue < 1000, alert"
-- Confidence scoring so you know how certain the detection is
-- Learned these methods from my stats class and SciPy docs
+**Production Structure** — modular code organised by responsibility, proper error handling and logging, type hints on public functions.
 
-**3. Production Structure**
-- Modular code organised by responsibility, not just notebooks
-- Unit tests for reliability (aiming for 80%+ coverage)
-- Proper error handling and logging
-- Type hints where it matters
+**Data Quality First** — explicit validation before any analysis. The system fails loudly on threshold breaches rather than silently accepting bad data.
 
-**4. Data Quality Focus**
-- Explicit validation rules before any analysis
-- Data quality checks that fail loudly if thresholds aren't met
-- Handles missing CustomerIDs (guest checkouts) and returns (negative quantities)
-
-Initially I just loaded the CSV and started analysing, but hit issues with:
-- Some product descriptions being null
-- Quantities being negative (returns)
-- A few unit prices being 0
-So I added explicit contracts to catch these upfront. The validation caught 4 edge cases immediately, which validated the approach.
+---
 
 ## Tech Stack
 
-**Core:**
-- Python 3.10+
-- Pandas & NumPy for data wrangling
-- SciPy & Statsmodels for statistical tests
-- scikit-learn for some preprocessing
+- Python 3.10+, Pandas, NumPy
+- SciPy & Statsmodels (Week 4)
 - PyYAML for config parsing
+- pytest, black, ruff
+- Git with conventional commits
 
-**Development:**
-- pytest for testing
-- black & ruff for formatting (finally gave in to auto-formatting after too many style debates with myself)
-- Git for version control with conventional commits
-
-**Maybe Later:**
-- Streamlit for dashboarding (tried it before, pretty straightforward)
-- OpenAI API for narrative generation (need to figure out cost first)
-- Plotly for interactive visualisations
-
-## What I'm Learning
-
-This project is forcing me to develop:
-
-**Analytics Engineering**
-- Building systems that run repeatedly, not one-off analyses
-- Thinking about reproducibility and maintainability
-- Understanding the difference between "works in a notebook" and "works in production"
-
-**Software Design**
-- Modular architecture (each layer has one job)
-- Separation of concerns (config vs code vs data)
-- When to use classes vs functions (still figuring this out tbh)
-
-**Statistical Thinking**
-- Moving beyond descriptive stats (mean, median) to inferential methods
-- Understanding false positive rates in anomaly detection
-- Quantifying uncertainty with confidence scores
-
-**Production Practices**
-- Writing tests that actually catch bugs (not just for coverage numbers)
-- Documentation that explains "why" not just "what"
-- Git commits that tell a story of what changed and why
-
-Biggest surprise so far: How much time goes into decisions that seem trivial, like "should this be a separate module?" or "what should I name this function?" Turns out software design is 20% coding and 80% deciding how to organise things.
-
-Also learned that real data is never clean. The 71.4% quality score isn't a failure—it's validation that the system works. In production, you'd investigate those 4 anomalies with business stakeholders, not blindly delete them.
+---
 
 ## Known Issues / TODOs
 
-Things I'm aware of but haven't addressed yet:
-- Scripts must be run as modules (`python -m`) not direct paths
-- No comprehensive test suite yet (Week 3 goal)
-- Config validation is basic (could add schema validation for YAML files)
-- No CI/CD setup yet (maybe GitHub Actions later?)
-- Documentation could use more code examples
+- No comprehensive test suite yet (planned for Week 4)
+- `new_customers` will equal `active_customers` on this dataset — we only have one year of data, so every customer's first order falls within the dataset period. In production you'd compare against a historical customer table.
+- `revenue_by_country` currently returns total revenue as a scalar. The actual per-country breakdown will be handled as a visualisation in Week 4 (our KPI engine only supports scalar outputs).
+- Config YAML validation is basic — could add schema validation
 
-Data Quality Items (Documented, Not Fixed):
-- 2 negative unit prices flagged for review
-- 2 transactions exceeding £100K threshold
-- Decision to proceed with these documented rather than cleaned
+---
 
-Also considering:
-- Should I use poetry instead of requirements.txt for dependency management?
-- Type hints everywhere or just on public functions?
-- How much unit testing is enough before it becomes overkill?
+## What I'm Learning
+
+This project is forcing me to think about things I didn't expect:
+
+- How much time goes into decisions that seem trivial — "should this be a separate module?", "what should I name this function?" Software design is probably 20% coding and 80% deciding how to organise things.
+- Real data is never clean. The 71.4% quality score isn't a failure, it's the validation system working correctly.
+- The difference between "works in a notebook" and "works in production" is enormous. Reproducibility, error handling, and modular structure matter a lot more than I initially appreciated.
+- When building a formula parser, ordering of checks matters. Ratio detection must come before aggregate detection or compound formulas break silently.
+
+---
 
 ## Acknowledgments
 
 - **Dataset:** UCI Machine Learning Repository (Online Retail Dataset)
-- **Inspiration:** Reading about how Looker, Mode, and dbt structure metric definitions got me thinking about config-driven approaches
-- **Statistical methods:** Learned from SciPy documentation, stats coursework, and a bunch of StackOverflow deep dives
-- **Architecture patterns:** Various blog posts on analytics engineering and data platform design
-
-Shoutout to everyone on the data engineering subreddit who unknowingly helped me through lurking.
-
-## Notes
-
-This is a learning project I'm building during my second year of Computer Science. My goals are:
-- Build something complete rather than abandoning it halfway (guilty of this before)
-- Write code that I could actually hand off to someone else
-- Understand the "why" behind design decisions, not just implement features
-- Practice building systems, not just writing scripts
-
-I'm documenting decisions and tradeoffs as I go because (1) future me will forget why I did things, and (2) it helps clarify my own thinking.
-
-If you're reading this and have suggestions or spot issues, feel free to open an issue or reach out. Always happy to learn from people with more experience.
+- **Inspiration:** Reading about how Looker, Mode, and dbt structure metric definitions
+- **Statistical methods:** SciPy docs, stats coursework, StackOverflow
+- **Architecture patterns:** Various blog posts on analytics engineering
 
 ---
 
-**Status:** Week 2 Complete | Week 3 Starting Soon  
-**Estimated Timeline:** 3 more weeks for core analytics engine
+**Status:** Week 3 Complete - all 16 KPIs calculating correctly  
+**Next:** Week 4 - Statistical anomaly detection  
+**Estimated completion:** 2 more weeks for core analytics engine
 
-Last updated: January 2026
+*Second year CS student building this to learn how production analytics systems actually work. Documenting decisions and tradeoffs as I go.*
+
+Last updated: February 2026
