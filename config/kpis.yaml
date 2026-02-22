@@ -23,33 +23,6 @@ kpis:
       - Country
       - ProductCategory
       - CustomerSegment
-    
-  revenue_per_order:
-    formula: "total_revenue / order_count"
-    owner: "Product"
-    cadence: "daily"
-    aggregation_level: "transaction"
-    description: "Average basket value per transaction"
-    business_context: "Indicates upsell/cross-sell effectiveness"
-    thresholds:
-      anomaly_sensitivity: 0.08
-      critical_drop: 0.20
-    dimensions:
-      - Country
-      - DayOfWeek
-      
-  revenue_per_customer:
-    formula: "total_revenue / active_customers"
-    owner: "Product"
-    cadence: "weekly"
-    aggregation_level: "customer"
-    description: "Revenue per active customer in period"
-    business_context: "Customer monetization effectiveness"
-    thresholds:
-      anomaly_sensitivity: 0.10
-    dimensions:
-      - CustomerTier
-      - AcquisitionChannel
 
 # =============================================================================
 # VOLUME METRICS
@@ -69,19 +42,6 @@ kpis:
       - Country
       - DayOfWeek
       - HourOfDay
-      
-  items_per_order:
-    formula: "sum(Quantity) / order_count"
-    owner: "Product"
-    cadence: "daily"
-    aggregation_level: "transaction"
-    description: "Average number of items per order"
-    business_context: "Basket composition and bundling effectiveness"
-    thresholds:
-      anomaly_sensitivity: 0.10
-    dimensions:
-      - Country
-      - CustomerSegment
 
   units_sold:
     formula: "sum(Quantity)"
@@ -113,7 +73,68 @@ kpis:
     dimensions:
       - Country
       - CustomerType
-      
+
+# =============================================================================
+# DERIVED REVENUE METRICS (depend on base metrics above)
+# =============================================================================
+
+  revenue_per_order:
+    formula: "total_revenue / order_count"
+    owner: "Product"
+    cadence: "daily"
+    aggregation_level: "transaction"
+    description: "Average basket value per transaction"
+    business_context: "Indicates upsell/cross-sell effectiveness"
+    thresholds:
+      anomaly_sensitivity: 0.08
+      critical_drop: 0.20
+    dimensions:
+      - Country
+      - DayOfWeek
+
+  revenue_per_customer:
+    formula: "total_revenue / active_customers"
+    owner: "Product"
+    cadence: "weekly"
+    aggregation_level: "customer"
+    description: "Revenue per active customer in period"
+    business_context: "Customer monetization effectiveness"
+    thresholds:
+      anomaly_sensitivity: 0.10
+    dimensions:
+      - CustomerTier
+      - AcquisitionChannel
+
+  items_per_order:
+    formula: "sum(Quantity) / order_count"
+    owner: "Product"
+    cadence: "daily"
+    aggregation_level: "transaction"
+    description: "Average number of items per order"
+    business_context: "Basket composition and bundling effectiveness"
+    thresholds:
+      anomaly_sensitivity: 0.10
+    dimensions:
+      - Country
+      - CustomerSegment
+
+  avg_unit_price:
+    formula: "total_revenue / units_sold"
+    owner: "Pricing"
+    cadence: "weekly"
+    aggregation_level: "product"
+    description: "Average price point across all products"
+    business_context: "Pricing mix and discount impact"
+    thresholds:
+      anomaly_sensitivity: 0.08
+    dimensions:
+      - ProductCategory
+      - Country
+
+# =============================================================================
+# CUSTOMER BEHAVIOUR METRICS
+# =============================================================================
+
   repeat_customer_rate:
     formula: "count(distinct CustomerID with orders > 1) / active_customers"
     owner: "Retention"
@@ -126,7 +147,7 @@ kpis:
     dimensions:
       - Country
       - AcquisitionCohort
-      
+
   new_customers:
     formula: "count(distinct CustomerID with first_order_date in period)"
     owner: "Growth"
@@ -155,19 +176,6 @@ kpis:
       anomaly_sensitivity: 0.05
     dimensions:
       - ProductCategory
-      
-  avg_unit_price:
-    formula: "total_revenue / units_sold"
-    owner: "Pricing"
-    cadence: "weekly"
-    aggregation_level: "product"
-    description: "Average price point across all products"
-    business_context: "Pricing mix and discount impact"
-    thresholds:
-      anomaly_sensitivity: 0.08
-    dimensions:
-      - ProductCategory
-      - Country
 
   product_return_rate:
     formula: "count(InvoiceNo with Quantity < 0) / order_count"
@@ -198,7 +206,7 @@ kpis:
       anomaly_sensitivity: 0.12
     dimensions:
       - Country
-      
+
   international_revenue_share:
     formula: "sum(revenue where Country != 'United Kingdom') / total_revenue"
     owner: "International"
@@ -211,9 +219,9 @@ kpis:
     dimensions:
       - Region
 
-
+# =============================================================================
 # TIME-BASED PATTERNS
-
+# =============================================================================
 
   weekend_revenue_share:
     formula: "sum(revenue where DayOfWeek in ['Saturday', 'Sunday']) / total_revenue"
@@ -224,7 +232,7 @@ kpis:
     business_context: "Shopping behavior patterns and staffing needs"
     thresholds:
       anomaly_sensitivity: 0.10
-      
+
   peak_hour_concentration:
     formula: "revenue_in_top_3_hours / total_revenue"
     owner: "Operations"
@@ -235,21 +243,21 @@ kpis:
     thresholds:
       anomaly_sensitivity: 0.08
 
-
+# =============================================================================
 # METADATA & GOVERNANCE
-
+# =============================================================================
 
 metadata:
   data_source: "UK Retail Transactions Dataset"
   refresh_frequency: "daily"
   data_retention: "2 years"
   quality_threshold: 0.95  # Minimum data completeness required
-  
+
   governance:
     approval_required: true
     version_control: true
     audit_trail: true
-    
+
   stakeholders:
     - name: "Finance Team"
       kpis: ["total_revenue", "revenue_per_order", "revenue_per_customer"]
