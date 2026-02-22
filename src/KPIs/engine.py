@@ -22,16 +22,12 @@ class KPIEngine:
     """Main engine for KPI calculation."""
     
     def __init__(self, config_path: str = "config/kpis.yaml"):
-        """
-        Initialize KPI engine.
-        
-        """
+        """Initialize KPI engine."""
         self.registry = KPIRegistry(config_path)
         self.results = {}
     
     def calculate_kpi(self, kpi_name: str, df: pd.DataFrame, calculated_kpis: dict = None) -> Optional[float]:
-        """ Calulation of KPIs """
-
+        """Calculate a single KPI."""
         formula = self.registry.get_formula(kpi_name)
         
         if not formula:
@@ -40,7 +36,7 @@ class KPIEngine:
         
         try:
             parser = FormulaParser(df)
-            value = parser.parse_and_execute(formula, calculated_kpis=calculated_kpis)  # ← Pass calculated_kpis
+            value = parser.parse_and_execute(formula, calculated_kpis=calculated_kpis)
             logger.debug(f"Calculated {kpi_name}: {value}")
             return value
         except Exception as e:
@@ -49,15 +45,14 @@ class KPIEngine:
     
     def calculate_all(self, df: pd.DataFrame, cadence: Optional[str] = None) -> Dict[str, float]:
         """
-        
-        Calculate all KPIs
-        
-        
-        """
+        Calculate all KPIs (or filtered by cadence).
 
+        Handles dependencies between KPIs by passing results forward —
+        each KPI is calculated in order and the results dict grows, so
+        later KPIs can reference earlier ones by name.
+        """
         results = {}
         
-        # Get KPIs to calculate
         if cadence:
             kpi_names = self.registry.list_kpis_by_cadence(cadence)
         else:
@@ -66,7 +61,7 @@ class KPIEngine:
         logger.info(f"Calculating {len(kpi_names)} KPIs...")
         
         for kpi_name in kpi_names:
-            value = self.calculate_kpi(kpi_name, df, calculated_kpis=results)  
+            value = self.calculate_kpi(kpi_name, df, calculated_kpis=results)
             if value is not None:
                 results[kpi_name] = value
         
@@ -83,12 +78,12 @@ class KPIEngine:
     ) -> pd.DataFrame:
         """
         Calculate KPIs for each time window.
-        
+
         Args:
             df: DataFrame with transaction data
             date_column: Name of date column
             window: Pandas offset string ('D' for daily, 'W' for weekly)
-            
+
         Returns:
             DataFrame with KPIs calculated per time window
         """
@@ -96,17 +91,12 @@ class KPIEngine:
             df[date_column] = pd.to_datetime(df[date_column])
         
         df_grouped = df.groupby(pd.Grouper(key=date_column, freq=window))
-        
         results_list = []
         
         for date, group_df in df_grouped:
             if len(group_df) == 0:
                 continue
-            
-            # Calculate all KPIs for this time window
             kpi_values = self.calculate_all(group_df)
-            
-            # Add date and KPI values
             row = {'date': date}
             row.update(kpi_values)
             results_list.append(row)
@@ -122,15 +112,7 @@ class KPIEngine:
         output_path: str = "data/processed/kpi_results.csv",
         append: bool = True
     ):
-        """
-        Save KPI results to CSV.
-        
-        Args:
-            results: Dictionary of KPI results
-            output_path: Where to save results
-            append: If True, append to existing file; if False, overwrite
-        """
-        # Create results DataFrame
+        """Save KPI results to CSV."""
         results_data = {
             'timestamp': [datetime.now()],
             'calculation_date': [datetime.now().date()]
@@ -139,13 +121,10 @@ class KPIEngine:
         
         df = pd.DataFrame(results_data)
         
-        # Create output directory if needed
         output_file = Path(output_path)
         output_file.parent.mkdir(parents=True, exist_ok=True)
         
-        # Save or append
         if append and output_file.exists():
-            # Load existing and append
             existing_df = pd.read_csv(output_file)
             df = pd.concat([existing_df, df], ignore_index=True)
         
@@ -155,9 +134,12 @@ class KPIEngine:
     def print_results(self, results: Optional[Dict[str, float]] = None):
         """
         Print KPI results in a readable format.
-        
-        Args:
-            results: Optional dict of results (uses self.results if None)
+
+        Formatting priority:
+          1. rate / share / concentration  →  percentage  (must come FIRST
+             because some names also contain 'revenue' or 'price')
+          2. revenue / price               →  currency
+          3. everything else               →  plain number
         """
         if results is None:
             results = self.results
@@ -181,7 +163,6 @@ class KPIEngine:
                 kpi_by_owner[owner] = []
             kpi_by_owner[owner].append(kpi_name)
         
-        # Print by owner
         for owner in sorted(kpi_by_owner.keys()):
             print(f"\n{owner} Metrics:")
             print("-" * 70)
@@ -191,11 +172,13 @@ class KPIEngine:
                 kpi_def = self.registry.get_kpi(kpi_name)
                 description = kpi_def.get('description', '') if kpi_def else ''
                 
-                # Format value based on KPI type
-                if 'revenue' in kpi_name.lower() or 'price' in kpi_name.lower():
-                    formatted_value = f"£{value:,.2f}"
-                elif 'rate' in kpi_name.lower() or 'share' in kpi_name.lower():
+                # IMPORTANT: check rate/share/concentration BEFORE revenue/price.
+                # Without this order, 'international_revenue_share' would match
+                # the 'revenue' check first and display as £ instead of %.
+                if any(word in kpi_name.lower() for word in ['rate', 'share', 'concentration']):
                     formatted_value = f"{value:.2%}"
+                elif any(word in kpi_name.lower() for word in ['revenue', 'price']):
+                    formatted_value = f"£{value:,.2f}"
                 else:
                     formatted_value = f"{value:,.0f}"
                 
@@ -208,23 +191,17 @@ class KPIEngine:
 
 def main():
     """Main execution function."""
-    # Load data
     logger.info("Loading transaction data...")
     loader = DataLoader()
     df = loader.load_retail_data()
     
-    # Initialize engine
     logger.info("Initializing KPI engine...")
     engine = KPIEngine()
     
-    # Calculate all KPIs
     logger.info("Calculating KPIs...")
     results = engine.calculate_all(df)
     
-    # Print results
     engine.print_results(results)
-    
-    # Save results
     engine.save_results(results)
     
     print("\n" + "="*70)

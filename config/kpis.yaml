@@ -17,8 +17,8 @@ kpis:
     description: "Total transaction value across all orders"
     business_context: "Primary health metric for business performance"
     thresholds:
-      anomaly_sensitivity: 0.05  # 5% deviation triggers investigation
-      critical_drop: 0.15        # 15% drop is critical
+      anomaly_sensitivity: 0.05
+      critical_drop: 0.15
     dimensions:
       - Country
       - ProductCategory
@@ -196,7 +196,10 @@ kpis:
 # =============================================================================
 
   revenue_by_country:
-    formula: "sum(Quantity * UnitPrice) group by Country"
+    # NOTE: group by syntax is not supported by the scalar formula parser.
+    # This KPI returns total revenue. Per-country breakdown is handled
+    # in Week 4 visualisations where a Series result is appropriate.
+    formula: "sum(Quantity * UnitPrice)"
     owner: "International"
     cadence: "weekly"
     aggregation_level: "geography"
@@ -251,7 +254,7 @@ metadata:
   data_source: "UK Retail Transactions Dataset"
   refresh_frequency: "daily"
   data_retention: "2 years"
-  quality_threshold: 0.95  # Minimum data completeness required
+  quality_threshold: 0.95
 
   governance:
     approval_required: true
