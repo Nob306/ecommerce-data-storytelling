@@ -15,8 +15,8 @@ This project analyses real UK retail transaction data to automatically:
 ## Current Status
 
 **Phase:** Core Analytics Engine  
-**Progress:** Anomaly Detection Complete  
-**Next Up:** Root cause analysis
+**Progress:** Core Engine Complete  
+**Next Up:** Dashboard, API layer, and LLM narrative generation
 
 ### Completed:
 - **Phase 1 - Foundation:** Project architecture and KPI specifications
@@ -37,9 +37,18 @@ This project analyses real UK retail transaction data to automatically:
   - Detected 47 anomalies across 13 KPIs on the weekly time series
   - Notable finding: product_revenue_concentration spiked 142% above expected in June 2011 - revenue unusually concentrated in top 20 products that week
   - Results saved to data/insights/anomalies.csv for root cause analysis
+- **Phase 5 - Root Cause Analysis:** Automated dimensional slicing to explain anomalies
+  - For each anomaly, filters raw transaction data to the anomaly week and slices by Country, StockCode, and HourOfDay
+  - Calculates each segment's contribution to the total deviation, scaled against the baseline period
+  - 19 anomalies successfully explained, 20 flagged for manual review (ratio KPIs cannot be directly segmented)
+  - Ratio KPIs are flagged rather than producing misleading results - you cannot slice repeat_customer_rate by Country without recalculating numerator and denominator separately per segment, and doing it naively gives nonsense numbers
+  - Results saved to data/insights/root_causes.csv
+  - Notable finding: the November 2011 spike in active_customers, order_count, total_revenue, and units_sold all trace back to the same cause - UK customers buying two specific products (StockCode 23084 and 22086) at unusually high volumes during afternoon hours. That is not four separate anomalies, it is one pre-Christmas wholesale buying event showing up across four metrics.
 
 ### Currently Building:
-- Root cause analysis
+- Streamlit dashboard and visualisations
+- FastAPI layer to expose KPI engine and anomaly detector as REST endpoints
+- LLM narrative generation to turn root cause output into plain English summaries
 
 ### Future Ideas (might add later):
 - AI-generated narrative summaries
@@ -142,7 +151,9 @@ ecommerce-data-storytelling/
 │   ├── insights/
 │   │   ├── models.py
 │   │   ├── methods.py
-│   │   └── detector.py
+│   │   ├── detector.py
+│   │   ├── results.py
+│   │   └── analyser.py
 │   ├── narratives/                
 │   └── platform/                  
 ├── data/
@@ -151,7 +162,8 @@ ecommerce-data-storytelling/
 │   ├── processed/
 │   │   └── kpi_results.csv       
 │   └── insights/
-│       └── anomalies.csv         47 anomalies detected
+│       ├── anomalies.csv         47 anomalies detected
+│       └── root_causes.csv      39 root cause results
 └── README.md
 ```
 
@@ -189,6 +201,9 @@ python -m src.kpis.engine
 
 # 4. Run anomaly detection
 python -m src.insights.detector
+
+# 5. Run root cause analysis
+python -m src.insights.analyser
 ```
 
 **Note:** Do not run scripts directly (e.g., `python src/data/ingestion.py`) as this causes import and path resolution errors. Always use the `-m` flag.
@@ -227,6 +242,15 @@ Total Anomalies Detected: 47
   MEDIUM: 13
   LOW: 19
 Results saved to: data/insights/anomalies.csv
+```
+
+**Root Cause Analyser:**
+```
+Total Anomalies Analysed: 39
+  Successfully explained: 19
+  Manual review required: 20
+  Insufficient data: 0
+Results saved to: data/insights/root_causes.csv
 ```
 
 ---
@@ -287,10 +311,16 @@ The trickiest part was the baseline problem: with only 13 months of data, the Ch
 When multiple methods flag the same KPI on the same date, confidence gets boosted. A point that Z-score and IQR both flag independently is stronger evidence than either alone.
 
 ### Phase 5: Root Cause Analysis 
-Automatically segment anomalies by Country, Product, Customer dimensions to identify what's driving a change. Trying to avoid the "analyst manually slices data for 2 hours" problem.
+For each detected anomaly, the analyser filters raw transaction data to the anomaly week and slices by Country, StockCode, and HourOfDay. It calculates how much each segment contributed to the total deviation relative to what was expected from the baseline, then ranks them by impact.
 
-### Future (maybe)
-Streamlit dashboard, LLM-generated narrative summaries, scheduled runs with Prefect.
+The key design decision was to flag ratio KPIs for manual review rather than analyse them naively. Slicing repeat_customer_rate by Country would require recalculating the numerator and denominator separately for each country - just filtering the data and recalculating the ratio produces numbers that look plausible but are wrong. Better to be honest about the limitation than to surface misleading results.
+
+Contribution percentages can exceed 100% for the primary driver - this is not a bug. It happens when the dominant segment (usually UK, which accounts for the majority of transactions) overcompensates while other segments were simultaneously below their baseline. The maths is correct; it just looks odd without context.
+
+The most interesting finding was that four separate anomalies in November 2011 (active_customers, order_count, total_revenue, units_sold) all point to the same root cause - two specific products bought by UK customers at high volumes during afternoon hours across three consecutive weeks. The root cause analyser caught that automatically, which is exactly what it was built to do.
+
+### Phase 6: Dashboard, API, and Narratives (in progress)
+Streamlit dashboard with Plotly visualisations, FastAPI layer to expose the pipeline as REST endpoints, and LLM narrative generation to turn root cause output into plain English summaries.
 
 ---
 
@@ -330,6 +360,7 @@ Running all three in parallel means sudden spikes, distributional outliers, and 
 - `new_customers` will equal `active_customers` on this dataset - we only have one year of data, so every customer's first order falls within the dataset period. In production you'd compare against a historical customer table.
 - `revenue_by_country` currently returns total revenue as a scalar. The actual per-country breakdown will be handled as a visualisation later (our KPI engine only supports scalar outputs).
 - Config YAML validation is basic - could add schema validation
+- Root cause contribution percentages can exceed 100% for the primary driver. This is not a calculation error - it happens when the dominant segment (usually UK, which drives the majority of transactions) overperforms while other segments are simultaneously below their baseline, meaning the primary segment has to "overcompensate" to produce the observed total deviation. The number is mathematically correct but looks odd without that explanation.
 
 ---
 
@@ -343,6 +374,7 @@ This project is forcing me to think about things I didn't expect:
 - When building a formula parser, ordering of checks matters. Ratio detection must come before aggregate detection or compound formulas break silently.
 - Baseline selection matters more than algorithm choice. The same Z-score threshold produces completely different results depending on whether you include a known seasonal spike in your baseline. Getting this wrong generates noise, not signal.
 - Multiple detection methods catching the same anomaly is much more meaningful than any single method - the confidence boosting logic ended up being one of the more useful design decisions.
+- Root cause analysis taught me that the same event can show up as multiple separate anomalies. The November 2011 spike looked like four distinct problems until the dimensional slicing showed they all pointed to the same two products and the same customer segment. Automated analysis caught something that would have taken an analyst a while to piece together manually.
 
 ---
 
@@ -355,9 +387,8 @@ This project is forcing me to think about things I didn't expect:
 
 ---
 
-**Status:** Phase 4 Complete - 47 anomalies detected across 13 KPIs  
-**Next:** Phase 5 - Root cause analysis  
-**Estimated completion:** 1 more phase for core analytics engine
+**Status:** Phase 5 Complete - core analytics engine done  
+**Next:** Phase 6 - Dashboard, API layer, and LLM narratives
 
 *Second year CS student building this to understand how production analytics systems actually work. Building in phases rather than a fixed schedule - shipping each layer properly before moving to the next.*
 
