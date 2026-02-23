@@ -14,26 +14,32 @@ This project analyses real UK retail transaction data to automatically:
 
 ## Current Status
 
-**Phase:** Core Analytics Engine (Weeks 1-5)  
-**Progress:** Week 3 Complete  
-**Next Up:** Statistical anomaly detection (Week 4)
+**Phase:** Core Analytics Engine  
+**Progress:** Anomaly Detection Complete  
+**Next Up:** Root cause analysis
 
 ### Completed:
-- **Week 1:** Project architecture and KPI specifications
-- **Week 2:** Data ingestion and validation pipeline
+- **Phase 1 - Foundation:** Project architecture and KPI specifications
+- **Phase 2 - Data Pipeline:** Data ingestion and validation pipeline
   - Successfully loaded 541,909 transactions
   - Implemented 14 automated quality checks
   - Achieved 71.4% data quality score (10/14 checks passed)
   - Identified and documented 4 data anomalies
-- **Week 3:** KPI computation engine
+- **Phase 3 - KPI Engine:** KPI computation engine
   - Built config-driven formula parser that reads metric definitions from YAML
   - Implemented support for simple aggregations, cross-KPI dependencies, conditional filtering, and complex multi-step calculations
   - All 16 KPIs calculating correctly across Finance, Operations, Growth, Product, and International categories
   - Results saved with timestamps to `data/processed/kpi_results.csv`
+- **Phase 4 - Anomaly Detection:** Statistical anomaly detection
+  - Built detection engine running Z-score, IQR, and Mann-Kendall tests across all 14 KPIs
+  - Implemented confidence scoring that boosts when multiple methods agree on the same anomaly
+  - Added baseline windowing to exclude Christmas 2010 from baseline calculations - without this, the seasonal spike inflates "normal" and makes regular months look like drops
+  - Detected 47 anomalies across 13 KPIs on the weekly time series
+  - Notable finding: product_revenue_concentration spiked 142% above expected in June 2011 - revenue unusually concentrated in top 20 products that week
+  - Results saved to data/insights/anomalies.csv for root cause analysis
 
 ### Currently Building:
-- Statistical anomaly detection (Week 4)
-- Root cause analysis (Week 5)
+- Root cause analysis
 
 ### Future Ideas (might add later):
 - AI-generated narrative summaries
@@ -74,7 +80,7 @@ Initial data quality assessment revealed some interesting characteristics:
 
 **Passing Checks:**
 - Schema validation: All columns present with correct types
-- Completeness: CustomerID 24.9% missing (acceptable — represents guest checkouts)
+- Completeness: CustomerID 24.9% missing (acceptable - represents guest checkouts)
 - Completeness: Description 0.3% missing (well within threshold)
 - Cancellations properly marked with negative quantities
 
@@ -82,7 +88,7 @@ Initial data quality assessment revealed some interesting characteristics:
 - 2 transactions with negative unit prices (0.0004% of data)
 - 2 transactions exceeding £100K threshold (0.0004% of data)
 
-**Decision:** Proceeding with these anomalies documented rather than cleaned. In a real-world scenario, these would be flagged for business review — they could be legitimate bulk orders or data entry errors requiring domain expertise to resolve. This demonstrates that the validation system works as intended: it catches edge cases for human review rather than silently accepting everything.
+**Decision:** Proceeding with these anomalies documented rather than cleaned. In a real-world scenario, these would be flagged for business review - they could be legitimate bulk orders or data entry errors requiring domain expertise to resolve. This demonstrates that the validation system works as intended: it catches edge cases for human review rather than silently accepting everything.
 
 ---
 
@@ -91,23 +97,23 @@ Initial data quality assessment revealed some interesting characteristics:
 The system has 5 layers that work together:
 
 ```
-Data Layer (Week 2) 
+Data Layer 
   ↓ Loads and validates CSV data
   
-KPI Layer (Week 3) completed
+KPI Layer 
   ↓ Calculates metrics from config files
   
-Detection Layer (Week 4) 
+Detection Layer 
   ↓ Finds anomalies and trends statistically
   
-Analysis Layer (Week 5) 
+Analysis Layer 
   ↓ Figures out why metrics changed
   
-Output Layer (Future) 
+Output Layer 
   ↓ Presents findings to users
 ```
 
-**Design decision:** Metrics are defined in YAML config files rather than hardcoded in Python. This means business logic (thresholds, formulas, owners) can be changed without touching the codebase — which is how real analytics platforms like dbt structure metric definitions.
+**Design decision:** Metrics are defined in YAML config files rather than hardcoded in Python. This means business logic (thresholds, formulas, owners) can be changed without touching the codebase - which is how real analytics platforms like dbt structure metric definitions.
 
 **How the formula parser works:** The KPI engine reads formula strings from `config/kpis.yaml` and executes them dynamically. It supports:
 - Simple aggregations: `sum(Quantity * UnitPrice)`
@@ -133,14 +139,19 @@ ecommerce-data-storytelling/
 │   │   ├── formulas.py           
 │   │   ├── registry.py           
 │   │   └── engine.py             
-│   ├── insights/                  
+│   ├── insights/
+│   │   ├── models.py
+│   │   ├── methods.py
+│   │   └── detector.py
 │   ├── narratives/                
 │   └── platform/                  
 ├── data/
 │   ├── raw/
 │   │   └── UK retail data.csv    541,909 rows
-│   └── processed/
-│       └── kpi_results.csv       
+│   ├── processed/
+│   │   └── kpi_results.csv       
+│   └── insights/
+│       └── anomalies.csv         47 anomalies detected
 └── README.md
 ```
 
@@ -175,6 +186,9 @@ python -m src.data.validation
 
 # 3. Calculate all 16 KPIs
 python -m src.kpis.engine
+
+# 4. Run anomaly detection
+python -m src.insights.detector
 ```
 
 **Note:** Do not run scripts directly (e.g., `python src/data/ingestion.py`) as this causes import and path resolution errors. Always use the `-m` flag.
@@ -205,6 +219,16 @@ Successfully calculated 16/16 KPIs
   ...
 ```
 
+**Anomaly Detector:**
+```
+Total Anomalies Detected: 47
+  CRITICAL: 1
+  HIGH: 14
+  MEDIUM: 13
+  LOW: 19
+Results saved to: data/insights/anomalies.csv
+```
+
 ---
 
 ## Dataset
@@ -216,7 +240,7 @@ Using real UK retail transaction data with:
 
 **Columns:** InvoiceNo, InvoiceDate, CustomerID, StockCode, Description, Quantity, UnitPrice, Country
 
-I picked this dataset because it's real business data with actual messiness — missing CustomerIDs, negative quantities for returns, outliers — rather than a clean synthetic dataset. This makes it better for demonstrating data quality practices.
+I picked this dataset because it's real business data with actual messiness - missing CustomerIDs, negative quantities for returns, outliers - rather than a clean synthetic dataset. This makes it better for demonstrating data quality practices.
 
 Source: UCI ML Repository (Online Retail Dataset)
 
@@ -236,30 +260,33 @@ Source: UCI ML Repository (Online Retail Dataset)
 
 **International:** revenue by country, international revenue share
 
-Each metric has an owner (Finance, Operations, etc.), a cadence (daily or weekly), and anomaly detection thresholds for Week 4.
+Each metric has an owner (Finance, Operations, etc.), a cadence (daily or weekly), and anomaly detection thresholds.
 
 ---
 
 ## Development Plan
 
-### Week 1: Foundation 
+### Phase 1: Foundation 
 Set up project structure, defined all 16 metrics in config files, documented data validation rules, planned architecture.
 
-### Week 2: Data Pipeline 
+### Phase 2: Data Pipeline 
 Built data loader with proper encoding (latin-1 for special characters), implemented 14 automated quality checks, achieved 71.4% data quality score with 4 documented anomalies.
 
-### Week 3: KPI Computation Engine 
+### Phase 3: KPI Computation Engine 
 Built a config-driven formula parser that executes metric definitions from YAML dynamically. The trickiest parts were handling cross-KPI dependencies (where one metric references another), conditional filtering (e.g. revenue from non-UK customers only), and complex aggregations like top-N product revenue that can't be expressed as simple formulas.
 
-**Key challenge solved:** The formula parser needs to check ratio patterns (`/`) before aggregate patterns (`sum(`, `count(`) — otherwise `sum(Quantity) / order_count` gets partially consumed by the aggregate check and the division is ignored.
+**Key challenge solved:** The formula parser needs to check ratio patterns (`/`) before aggregate patterns (`sum(`, `count(`) - otherwise `sum(Quantity) / order_count` gets partially consumed by the aggregate check and the division is ignored.
 
-### Week 4: Anomaly Detection (Next)
-- Z-score method for sudden spikes
-- IQR for outlier-robust detection
-- Mann-Kendall test for gradual trend changes
-- Confidence scoring per detection
+### Phase 4: Anomaly Detection 
+Three detection methods running in parallel across all KPIs:
 
-### Week 5: Root Cause Analysis
+Z-score catches sudden spikes by measuring how many standard deviations a value is from the mean. IQR is more robust - it uses the middle 50% of the data so extreme values don't distort what counts as normal. Mann-Kendall detects gradual trends rather than point anomalies - it's what flagged that revenue, orders, and active customers were all on a statistically significant upward trajectory through 2011.
+
+The trickiest part was the baseline problem: with only 13 months of data, the Christmas 2010 spike is part of the same dataset you're detecting anomalies in. Adding a configurable baseline_window parameter to exclude that period was the fix - you can tell the detector "calculate what's normal using Jan-Nov 2011 only."
+
+When multiple methods flag the same KPI on the same date, confidence gets boosted. A point that Z-score and IQR both flag independently is stronger evidence than either alone.
+
+### Phase 5: Root Cause Analysis 
 Automatically segment anomalies by Country, Product, Customer dimensions to identify what's driving a change. Trying to avoid the "analyst manually slices data for 2 hours" problem.
 
 ### Future (maybe)
@@ -269,20 +296,28 @@ Streamlit dashboard, LLM-generated narrative summaries, scheduled runs with Pref
 
 ## Technical Approach
 
-**Config-Driven Design** — metrics defined in YAML, not Python. Business logic is separate from implementation. Inspired by how dbt handles metric definitions.
+**Config-Driven Design** - metrics defined in YAML, not Python. Business logic is separate from implementation. Inspired by how dbt handles metric definitions.
 
-**Statistical Methods** — using actual statistical tests (Z-score, IQR, Mann-Kendall) with confidence scoring, not arbitrary hardcoded thresholds.
+**Statistical Methods** - three methods were chosen deliberately, each catching a different type of problem:
 
-**Production Structure** — modular code organised by responsibility, proper error handling and logging, type hints on public functions.
+Z-score is the most interpretable - it tells you exactly how many standard deviations a value is from the mean, which is easy to explain to a non-technical stakeholder. The tradeoff is it assumes the data is roughly normally distributed, which retail revenue isn't (it's right-skewed because of occasional large orders). So Z-score alone would miss some real anomalies and generate false positives on others.
 
-**Data Quality First** — explicit validation before any analysis. The system fails loudly on threshold breaches rather than silently accepting bad data.
+IQR fixes that problem. Instead of using the mean and standard deviation (which get pulled by extreme values), it uses the middle 50% of the data to set its boundaries. That makes it robust to the kind of skewed distributions you get with revenue data. The downside is it's less interpretable - "this value is 2.3 IQR fence widths outside the upper fence" doesn't mean much to most people.
+
+Mann-Kendall is different from both - it doesn't look at individual points at all. It's a non-parametric rank-based test that asks whether there's a statistically significant monotonic trend across the whole series. It's what caught that revenue, orders, and active customers were all gradually increasing through 2011, even in weeks where no single data point looked unusual. Non-parametric means it makes no assumptions about the distribution of the data, which matters here.
+
+Running all three in parallel means sudden spikes, distributional outliers, and gradual drift are all covered. When multiple methods flag the same point, confidence gets boosted - that's the key design decision that keeps false positive rates manageable.
+
+**Production Structure** - modular code organised by responsibility, proper error handling and logging, type hints on public functions.
+
+**Data Quality First** - explicit validation before any analysis. The system fails loudly on threshold breaches rather than silently accepting bad data.
 
 ---
 
 ## Tech Stack
 
 - Python 3.10+, Pandas, NumPy
-- SciPy & Statsmodels (Week 4)
+- SciPy & Statsmodels
 - PyYAML for config parsing
 - pytest, black, ruff
 - Git with conventional commits
@@ -291,10 +326,10 @@ Streamlit dashboard, LLM-generated narrative summaries, scheduled runs with Pref
 
 ## Known Issues / TODOs
 
-- No comprehensive test suite yet (planned for Week 4)
-- `new_customers` will equal `active_customers` on this dataset — we only have one year of data, so every customer's first order falls within the dataset period. In production you'd compare against a historical customer table.
-- `revenue_by_country` currently returns total revenue as a scalar. The actual per-country breakdown will be handled as a visualisation in Week 4 (our KPI engine only supports scalar outputs).
-- Config YAML validation is basic — could add schema validation
+- No comprehensive test suite yet
+- `new_customers` will equal `active_customers` on this dataset - we only have one year of data, so every customer's first order falls within the dataset period. In production you'd compare against a historical customer table.
+- `revenue_by_country` currently returns total revenue as a scalar. The actual per-country breakdown will be handled as a visualisation later (our KPI engine only supports scalar outputs).
+- Config YAML validation is basic - could add schema validation
 
 ---
 
@@ -302,10 +337,12 @@ Streamlit dashboard, LLM-generated narrative summaries, scheduled runs with Pref
 
 This project is forcing me to think about things I didn't expect:
 
-- How much time goes into decisions that seem trivial — "should this be a separate module?", "what should I name this function?" Software design is probably 20% coding and 80% deciding how to organise things.
+- How much time goes into decisions that seem trivial - "should this be a separate module?", "what should I name this function?" Software design is probably 20% coding and 80% deciding how to organise things.
 - Real data is never clean. The 71.4% quality score isn't a failure, it's the validation system working correctly.
 - The difference between "works in a notebook" and "works in production" is enormous. Reproducibility, error handling, and modular structure matter a lot more than I initially appreciated.
 - When building a formula parser, ordering of checks matters. Ratio detection must come before aggregate detection or compound formulas break silently.
+- Baseline selection matters more than algorithm choice. The same Z-score threshold produces completely different results depending on whether you include a known seasonal spike in your baseline. Getting this wrong generates noise, not signal.
+- Multiple detection methods catching the same anomaly is much more meaningful than any single method - the confidence boosting logic ended up being one of the more useful design decisions.
 
 ---
 
@@ -318,10 +355,10 @@ This project is forcing me to think about things I didn't expect:
 
 ---
 
-**Status:** Week 3 Complete - all 16 KPIs calculating correctly  
-**Next:** Week 4 - Statistical anomaly detection  
-**Estimated completion:** 2 more weeks for core analytics engine
+**Status:** Phase 4 Complete - 47 anomalies detected across 13 KPIs  
+**Next:** Phase 5 - Root cause analysis  
+**Estimated completion:** 1 more phase for core analytics engine
 
-*Second year CS student building this to learn how production analytics systems actually work. Documenting decisions and tradeoffs as I go.*
+*Second year CS student building this to understand how production analytics systems actually work. Building in phases rather than a fixed schedule - shipping each layer properly before moving to the next.*
 
 Last updated: February 2026
