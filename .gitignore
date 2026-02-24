@@ -38,3 +38,9 @@ htmlcov/
 data/processed/
 data/insights/
 
+# Environment variables
+.env
+.env.local
+
+# Generated cache
+data/cache/
