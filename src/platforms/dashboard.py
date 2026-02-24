@@ -8,7 +8,7 @@ Four pages:
   4. Insights      - November 2011 story with LLM narratives
 
 Run with:
-    streamlit run src/platforms/dashboard.py
+    streamlit run src/platform/dashboard.py
 
 Requires precompute.py to have been run first:
     python -m src.platform.precompute
@@ -21,7 +21,6 @@ import plotly.express as px
 from pathlib import Path
 import json
 
-
 st.set_page_config(
     page_title='E-Commerce Analytics Intelligence',
     page_icon='📊',
@@ -31,6 +30,34 @@ st.set_page_config(
 
 CACHE_DIR = Path('data/cache')
 NARRATIVES_PATH = Path('data/insights/narratives.json')
+
+def cache_is_ready() -> bool:
+    """Check all four required cache files exist."""
+    required = [
+        'kpi_timeseries.parquet',
+        'kpi_latest.parquet',
+        'anomalies.parquet',
+        'root_causes.parquet',
+    ]
+    return all((CACHE_DIR / f).exists() for f in required)
+
+if not cache_is_ready():
+    with st.spinner('First run detected - building data cache (this takes 2-3 minutes)...'):
+        try:
+            from src.platforms.precompute import precompute_all
+            precompute_all()
+            st.success('Cache built successfully. Loading dashboard...')
+            st.rerun()
+        except Exception as e:
+            st.error(f'Cache build failed: {e}')
+            st.markdown("""
+**To fix this, run precompute manually from your project root:**
+```bash
+python -m src.platforms.precompute
+```
+Then refresh this page.
+""")
+            st.stop()
 
 @st.cache_data
 def load_kpi_timeseries():
@@ -70,7 +97,6 @@ def load_narratives():
         return {}
     with open(NARRATIVES_PATH) as f:
         return json.load(f)
-
 
 KPI_DISPLAY = {
     'total_revenue': 'Total Revenue',
@@ -142,7 +168,6 @@ def get_trend(ts_df: pd.DataFrame, kpi: str) -> str:
         return '↓'
     else:
         return '→'
-
 
 st.sidebar.title('Analytics Intelligence')
 st.sidebar.markdown('UK Retail Dataset  \n541,909 transactions  \nDec 2010 - Dec 2011')
@@ -226,6 +251,7 @@ if page == 'Overview':
 
         st.divider()
 
+    # Summary stats
     if anomalies_df is not None:
         col1, col2, col3, col4 = st.columns(4)
         col1.metric('Total Anomalies', len(anomalies_df))
@@ -271,6 +297,7 @@ elif page == 'Time Series':
         hovertemplate='%{x|%Y-%m-%d}<br>' + selected_display + ': %{y:,.2f}<extra></extra>'
     ))
 
+    # Anomaly markers
     if len(kpi_anomalies) > 0:
         for _, anomaly in kpi_anomalies.iterrows():
             anomaly_date = pd.Timestamp(anomaly['date'])
@@ -304,6 +331,7 @@ elif page == 'Time Series':
 
     st.plotly_chart(fig, use_container_width=True)
 
+    # Stats below chart
     col1, col2, col3, col4 = st.columns(4)
     col1.metric('Mean', format_kpi_value(selected_kpi, series.mean()))
     col2.metric('Min', format_kpi_value(selected_kpi, series.min()))
@@ -426,6 +454,8 @@ elif page == 'Anomalies':
                             coloraxis_showscale=False
                         )
                         st.plotly_chart(fig, use_container_width=True)
+
+                    # LLM narrative
                     narrative_key = f"{kpi_name}_{date_str}"
                     if narrative_key in narratives:
                         st.info(narratives[narrative_key]['narrative'])
@@ -455,6 +485,8 @@ total_revenue, and units_sold. Root cause analysis revealed they all trace back 
     if rc_df is not None and ts_df is not None:
         nov_kpis = ['active_customers', 'order_count', 'total_revenue', 'units_sold']
         nov_dates = ['2011-11-13', '2011-11-20']
+
+        # Plot the four KPIs together around the spike period
         fig = go.Figure()
         colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6']
 
@@ -462,6 +494,7 @@ total_revenue, and units_sold. Root cause analysis revealed they all trace back 
             if kpi not in ts_df.columns:
                 continue
             series = ts_df[kpi].dropna()
+            # Normalise to % of mean for comparison on same axis
             mean = series.mean()
             normalised = (series / mean) * 100
 
@@ -474,6 +507,7 @@ total_revenue, and units_sold. Root cause analysis revealed they all trace back 
                 hovertemplate='%{x|%Y-%m-%d}<br>%{y:.1f}% of mean<extra>' + KPI_DISPLAY.get(kpi, kpi) + '</extra>'
             ))
 
+        # Mark the November spike window
         fig.add_vrect(
             x0='2011-11-06', x1='2011-11-27',
             fillcolor='#fef3c7', opacity=0.4,

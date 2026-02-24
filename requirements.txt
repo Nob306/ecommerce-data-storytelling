@@ -24,3 +24,7 @@ mypy>=1.3.0
 # Type stubs
 pandas-stubs>=2.0.0
 types-PyYAML>=6.0.0
+
+groq>=0.4.0
+python-dotenv>=1.0.0
+pyarrow>=12.0.0
