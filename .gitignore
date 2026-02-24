@@ -36,11 +36,8 @@ htmlcov/
 # Note: We're committing the CSV for portfolio purposes
 # data/raw/*.csv
 data/processed/
-data/insights/
+data/cache/
 
 # Environment variables
 .env
 .env.local
-
-# Generated cache
-data/cache/
