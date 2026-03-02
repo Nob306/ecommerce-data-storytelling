@@ -21,6 +21,10 @@ import plotly.express as px
 from pathlib import Path
 import json
 
+# ============================================================================
+# PAGE CONFIG
+# ============================================================================
+
 st.set_page_config(
     page_title='E-Commerce Analytics Intelligence',
     page_icon='📊',
@@ -30,6 +34,10 @@ st.set_page_config(
 
 CACHE_DIR = Path('data/cache')
 NARRATIVES_PATH = Path('data/insights/narratives.json')
+
+# ============================================================================
+# AUTO-PRECOMPUTE — runs pipeline on first load if cache is missing
+# ============================================================================
 
 def cache_is_ready() -> bool:
     """Check all four required cache files exist."""
@@ -59,12 +67,18 @@ Then refresh this page.
 """)
             st.stop()
 
+# ============================================================================
+# DATA LOADING — cached so it only runs once per session
+# ============================================================================
+
 @st.cache_data
 def load_kpi_timeseries():
     path = CACHE_DIR / 'kpi_timeseries.parquet'
     if not path.exists():
         return None
-    return pd.read_parquet(path)
+    df = pd.read_parquet(path)
+    df.index = pd.to_datetime(df.index)
+    return df
 
 @st.cache_data
 def load_kpi_latest():
@@ -97,6 +111,10 @@ def load_narratives():
         return {}
     with open(NARRATIVES_PATH) as f:
         return json.load(f)
+
+# ============================================================================
+# CONSTANTS
+# ============================================================================
 
 KPI_DISPLAY = {
     'total_revenue': 'Total Revenue',
@@ -132,6 +150,10 @@ SEVERITY_COLORS = {
     'medium': '#d97706',
     'low': '#65a30d',
 }
+
+# ============================================================================
+# FORMATTING HELPERS
+# ============================================================================
 
 def format_kpi_value(kpi_name: str, value: float) -> str:
     if kpi_name in CURRENCY_KPIS:
@@ -169,6 +191,10 @@ def get_trend(ts_df: pd.DataFrame, kpi: str) -> str:
     else:
         return '→'
 
+# ============================================================================
+# SIDEBAR
+# ============================================================================
+
 st.sidebar.title('Analytics Intelligence')
 st.sidebar.markdown('UK Retail Dataset  \n541,909 transactions  \nDec 2010 - Dec 2011')
 st.sidebar.divider()
@@ -183,6 +209,9 @@ st.sidebar.divider()
 st.sidebar.caption('Run `python -m src.platform.precompute` to refresh data')
 st.sidebar.caption('Run `python -m src.narratives.narrator` to generate AI summaries')
 
+# ============================================================================
+# CHECK CACHE
+# ============================================================================
 
 ts_df = load_kpi_timeseries()
 latest_df = load_kpi_latest()
@@ -193,6 +222,10 @@ narratives = load_narratives()
 if ts_df is None:
     st.error('Cache not found. Run `python -m src.platform.precompute` first.')
     st.stop()
+
+# ============================================================================
+# PAGE 1: OVERVIEW
+# ============================================================================
 
 if page == 'Overview':
     st.title('E-Commerce Analytics Intelligence')
@@ -258,6 +291,10 @@ if page == 'Overview':
         col2.metric('Critical', len(anomalies_df[anomalies_df['severity'] == 'critical']))
         col3.metric('High', len(anomalies_df[anomalies_df['severity'] == 'high']))
         col4.metric('KPIs Affected', anomalies_df['kpi_name'].nunique())
+
+# ============================================================================
+# PAGE 2: TIME SERIES
+# ============================================================================
 
 elif page == 'Time Series':
     st.title('KPI Time Series')
@@ -347,6 +384,10 @@ elif page == 'Time Series':
             use_container_width=True,
             hide_index=True
         )
+
+# ============================================================================
+# PAGE 3: ANOMALIES
+# ============================================================================
 
 elif page == 'Anomalies':
     st.title('Anomaly Explorer')
@@ -470,6 +511,9 @@ elif page == 'Anomalies':
             else:
                 st.caption('No root cause data found for this anomaly.')
 
+# ============================================================================
+# PAGE 4: INSIGHTS
+# ============================================================================
 
 elif page == 'Insights':
     st.title('Key Insights')
@@ -542,6 +586,7 @@ it is one event.
 
     st.divider()
 
+    # Show narratives for the November anomalies
     if narratives:
         st.subheader('AI-Generated Summaries')
         nov_narratives = {

@@ -6,7 +6,7 @@ Saves to parquet files so the dashboard loads in milliseconds
 rather than rerunning the full pipeline on every page load.
 
 Run this before launching the dashboard:
-    python -m src.platforms.precompute
+    python -m src.platform.precompute
 
 Output files:
     data/cache/kpi_timeseries.parquet   - 53 weekly KPI values
@@ -46,6 +46,10 @@ def precompute_all():
     logger.info('Computing KPI time series...')
     engine = KPIEngine()
     ts_df = engine.calculate_by_time_window(df, window='W')
+    # Promote date column to index for dashboard plotting
+    ts_df['date'] = pd.to_datetime(ts_df['date'])
+    ts_df = ts_df.set_index('date')
+    ts_df.index.name = 'week_date'
     ts_df.to_parquet(CACHE_DIR / 'kpi_timeseries.parquet', index=True)
     logger.info(f'Saved KPI time series: {ts_df.shape}')
 
