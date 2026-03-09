@@ -37,6 +37,7 @@ htmlcov/
 # data/raw/*.csv
 data/processed/
 data/cache/
+data/vector-store/
 
 # Environment variables
 .env
