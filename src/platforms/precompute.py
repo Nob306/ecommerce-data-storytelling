@@ -34,26 +34,18 @@ def precompute_all():
         level=logging.INFO,
         format='%(levelname)s:%(name)s:%(message)s'
     )
-
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-
-    # --- Load raw data ---
     logger.info('Loading transaction data...')
     loader = DataLoader()
     df = loader.load_retail_data()
-
-    # --- KPI time series (53 weekly periods) ---
     logger.info('Computing KPI time series...')
     engine = KPIEngine()
     ts_df = engine.calculate_by_time_window(df, window='W')
-    # Promote date column to index for dashboard plotting
     ts_df['date'] = pd.to_datetime(ts_df['date'])
     ts_df = ts_df.set_index('date')
     ts_df.index.name = 'week_date'
     ts_df.to_parquet(CACHE_DIR / 'kpi_timeseries.parquet', index=True)
     logger.info(f'Saved KPI time series: {ts_df.shape}')
-
-    # --- Latest KPI values (full dataset) ---
     logger.info('Computing latest KPI values...')
     latest = engine.calculate_all(df)
     latest_df = pd.DataFrame([latest])

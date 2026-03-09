@@ -1,17 +1,18 @@
 """
 E-Commerce Analytics Intelligence System - Streamlit Dashboard
 
-Four pages:
+Five pages:
   1. Overview      - 16 KPI cards with trend and anomaly status
   2. Time Series   - weekly KPI charts with anomaly markers
   3. Anomalies     - filterable anomaly table with root cause breakdown
   4. Insights      - November 2011 story with LLM narratives
+  5. AI Lab        - LLM monitoring, narrative comparison, prompt versions
 
 Run with:
-    streamlit run src/platform/dashboard.py
+    streamlit run src/platforms/dashboard.py
 
 Requires precompute.py to have been run first:
-    python -m src.platform.precompute
+    python -m src.platforms.precompute
 """
 
 import streamlit as st
@@ -20,6 +21,15 @@ import plotly.graph_objects as go
 import plotly.express as px
 from pathlib import Path
 import json
+import yaml
+
+import sys
+import os
+# Ensure project root is on the path regardless of how streamlit is invoked
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+
+from src.config.tenant_config import TenantConfig
+from src.platforms.ai_lab import render_ai_lab
 
 # ============================================================================
 # PAGE CONFIG
@@ -201,13 +211,17 @@ st.sidebar.divider()
 
 page = st.sidebar.radio(
     'Navigate',
-    ['Overview', 'Time Series', 'Anomalies', 'Insights'],
+    ['Overview', 'Time Series', 'Anomalies', 'Insights', '🧪 AI Lab'],
     label_visibility='collapsed'
 )
 
 st.sidebar.divider()
-st.sidebar.caption('Run `python -m src.platform.precompute` to refresh data')
-st.sidebar.caption('Run `python -m src.narratives.narrator` to generate AI summaries')
+st.sidebar.caption('Run `python -m src.platforms.precompute` to refresh data')
+st.sidebar.caption('Run `python -m src.narratives.narrator` for standard narratives')
+st.sidebar.caption('Run `python -m src.narratives.rag_narrator` for RAG narratives')
+
+# Tenant config - single-tenant by default, multi-tenant ready
+tenant_config = TenantConfig()
 
 # ============================================================================
 # CHECK CACHE
@@ -622,3 +636,6 @@ Product return rate showed a statistically significant downward trend
 (p=0.007). Fewer returns over time suggests improving product-market fit 
 or better product descriptions reducing buyer mismatch.
 """)
+
+elif page == '🧪 AI Lab':
+    render_ai_lab(tenant_config)
