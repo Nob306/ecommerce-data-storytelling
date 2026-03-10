@@ -35,7 +35,7 @@ This project analyses real UK retail transaction data to automatically:
   - Implemented confidence scoring that boosts when multiple methods agree on the same anomaly
   - Added baseline windowing to exclude Christmas 2010 from baseline calculations - without this, the seasonal spike inflates "normal" and makes regular months look like drops
   - Detected 47 anomalies across 13 KPIs on the weekly time series
-  - Notable finding: product_revenue_concentration spiked 142% above expected in June 2011 - revenue unusually concentrated in top 20 products that week
+  - Notable finding: product_revenue_concentration spiked above expected in June 2011 - revenue was more concentrated in top 20 products than usual that week
   - Results saved to data/insights/anomalies.csv for root cause analysis
 - **Phase 5 - Root Cause Analysis:** Automated dimensional slicing to explain anomalies
   - For each anomaly, filters raw transaction data to the anomaly week and slices by Country, StockCode, and HourOfDay
@@ -70,14 +70,14 @@ Note: I'm prioritising getting the core analytics engine working well before add
 | Items per Order | 200 |
 | Units Sold | 5,176,450 |
 | Active Customers | 4,372 |
-| Repeat Customer Rate | ~83% |
+| Repeat Customer Rate | ~70% |
 | New Customers | 4,372 |
-| Product Revenue Concentration | ~47% from top 20 products |
+| Product Revenue Concentration | ~14% from top 20 products |
 | Avg Unit Price | £1.88 |
 | Product Return Rate | ~20% |
 | International Revenue Share | ~16% |
 | Weekend Revenue Share | ~8% |
-| Peak Hour Concentration | ~35% |
+| Peak Hour Concentration | ~40% |
 
 ---
 
@@ -229,7 +229,7 @@ Successfully calculated 16/16 KPIs
   total_revenue ..................... £9,747,747.93
   order_count ....................... 25,900
   active_customers .................. 4,372
-  repeat_customer_rate .............. 83.26%
+  repeat_customer_rate .............. 70.00%
   international_revenue_share ....... 16.07%
   ...
 ```
