@@ -16,7 +16,7 @@ This project analyses real UK retail transaction data to automatically:
 
 **Phase:** Phase 6 Complete  
 **Progress:** Full pipeline from raw data to AI-generated narratives, live dashboard, and LLM observability  
-**Next Up:** Phase 7 — PostgreSQL + dbt + Power BI + CI/CD
+**Next Up:** Phase 7 PostgreSQL + dbt + Power BI + CI/CD
 
 ### Completed:
 - **Phase 1 - Foundation:** Project architecture and KPI specifications
@@ -52,7 +52,7 @@ This project analyses real UK retail transaction data to automatically:
   - Monitoring layer logs every LLM call to JSONL with latency, token usage, cost, and quality flags
   - RAG pipeline built with LangChain LCEL + ChromaDB + sentence-transformers — retrieves 3 similar historical anomalies before generating each narrative
   - AI Lab dashboard page surfaces monitoring stats, narrative comparison (standard vs RAG), and full prompt version history
-  - TenantConfig path resolution layer — single-tenant now, multi-tenant ready
+  - TenantConfig path resolution layer single-tenant now, multi-tenant ready
 
 ### Currently Building:
 - Phase 7: PostgreSQL + dbt + Power BI + CI/CD
@@ -244,8 +244,8 @@ python -m src.insights.analyser
 python -m src.platforms.precompute
 
 # 7. Generate narratives
-python -m src.narratives.narrator         # Standard (v2 prompt)
-python -m src.narratives.rag_narrator     # RAG-enhanced (v2-rag)
+python -m src.narratives.narrator         
+python -m src.narratives.rag_narrator     
 
 # 8. Launch dashboard
 streamlit run src/platforms/dashboard.py
@@ -256,7 +256,7 @@ streamlit run src/platforms/dashboard.py
 ### Expected Output
 
 **Ingestion:**
-```
+
 INFO: Loaded 541,909 rows and 8 columns
 Date range: 2010-12-01 to 2011-12-09
 ```
@@ -476,7 +476,7 @@ This project is forcing me to think about things I didn't expect:
 
 ## How I Built This With AI Assistance
 
-This project was built using Claude as a pair programming tool throughout. I'm documenting this deliberately rather than omitting it — transparency about AI-assisted development is more useful than pretending it didn't happen, and the way I used it is worth explaining.
+This project was built using Claude as a pair programming tool throughout. I'm documenting this deliberately rather than omitting it, transparency about AI-assisted development is more useful than pretending it didn't happen, and the way I used it is worth explaining.
 
 ### The workflow
 
@@ -515,7 +515,7 @@ If an interviewer wants to walk through any part of this codebase, I can explain
 ---
 
 **Status:** Phase 6 Complete  
-**Next:** Phase 7 — PostgreSQL + dbt + Power BI + CI/CD
+**Next:** Phase 7 PostgreSQL + dbt + Power BI + CI/CD
 
 *Second year CS student building this to understand how production analytics systems actually work. Building in phases rather than a fixed schedule - shipping each layer properly before moving to the next.*
 
