@@ -4,10 +4,6 @@
 version: "1.0.0"
 last_updated: "2026-01-05"
 
-# =============================================================================
-# RAW DATA CONTRACT - UK Retail Transactions
-# =============================================================================
-
 raw_data:
   source_name: "uk_retail_transactions"
   description: "Transactional data from UK-based online retail company"
@@ -42,7 +38,7 @@ raw_data:
       
     Description:
       type: "string"
-      nullable: true  # Some products may have missing descriptions
+      nullable: true  
       description: "Product description"
       validation:
         max_length: 500
@@ -68,8 +64,8 @@ raw_data:
         - "Zero prices may indicate promotional items or data quality issues"
         
     CustomerID:
-      type: "string"  # Stored as string to handle various formats
-      nullable: true   # Some transactions lack customer ID
+      type: "string"  
+      nullable: true  
       description: "Unique customer identifier"
       validation:
         pattern: "^[0-9]{5}$"
@@ -82,10 +78,6 @@ raw_data:
       validation:
         allowed_values: "ISO country names"
       examples: ["United Kingdom", "Germany", "France", "EIRE"]
-
-# =============================================================================
-# DATA QUALITY RULES
-# =============================================================================
 
 data_quality:
   completeness:
@@ -237,17 +229,13 @@ processed_data:
         type: "datetime"
         nullable: true
 
-# =============================================================================
-# VALIDATION THRESHOLDS
-# =============================================================================
-
 validation_thresholds:
   overall_quality_score:
     minimum: 0.95  # Pipeline fails if data quality < 95%
-    warning: 0.98  # Warn if quality < 98%
+    warning: 0.98  
     
   row_count:
-    minimum_daily: 100  # Expect at least 100 transactions per day
+    minimum_daily: 100  
     warning_daily: 500
     
   temporal_gaps:
@@ -255,10 +243,6 @@ validation_thresholds:
     
   duplicate_detection:
     max_duplicate_rate: 0.01  # Allow up to 1% duplicates
-
-# =============================================================================
-# DATA LINEAGE TRACKING
-# =============================================================================
 
 lineage:
   source_system: "uk_retail_erp"
@@ -290,13 +274,9 @@ lineage:
       formula: "Country != 'United Kingdom'"
       type: "boolean"
 
-# =============================================================================
-# ERROR HANDLING
-# =============================================================================
-
 error_handling:
   on_validation_failure:
-    action: "log_and_continue"  # Options: fail, skip_row, log_and_continue
+    action: "log_and_continue"  
     notification: true
     
   on_quality_threshold_breach:

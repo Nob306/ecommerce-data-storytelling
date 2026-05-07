@@ -26,7 +26,7 @@ def render_ai_lab(config):
     st.title('AI Lab')
     st.markdown(
         'Observability and evaluation for the LLM narrative pipeline. '
-        'Every API call is logged — use this page to monitor cost, quality, '
+        'Every API call is logged use this page to monitor cost, quality, '
         'and compare prompt versions.'
     )
 
