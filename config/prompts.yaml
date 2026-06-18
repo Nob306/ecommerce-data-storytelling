@@ -1,12 +1,3 @@
-# Prompt templates for LLM narrative generation
-# Each version is tracked here so changes are visible in git history.
-# The narrator always uses the last version in the list unless told otherwise.
-#
-# Changelog:
-#   v1 - Initial prompt. Direct instruction style, third person past tense.
-#   v2 - Added explicit instruction to reference business implications,
-#        tightened length constraint to 2 sentences max.
-
 narrative_prompt:
   versions:
 

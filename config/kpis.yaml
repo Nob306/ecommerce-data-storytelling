@@ -1,12 +1,5 @@
-# KPI Definitions for E-Commerce Data Storytelling
-# Each KPI includes formula, ownership, cadence, and detection thresholds
-
 version: "1.0.0"
 last_updated: "2026-01-05"
-
-# =============================================================================
-# REVENUE METRICS
-# =============================================================================
 
 kpis:
   total_revenue:
@@ -23,10 +16,6 @@ kpis:
       - Country
       - ProductCategory
       - CustomerSegment
-
-# =============================================================================
-# VOLUME METRICS
-# =============================================================================
 
   order_count:
     formula: "count(distinct InvoiceNo)"
@@ -56,10 +45,6 @@ kpis:
       - StockCode
       - ProductCategory
 
-# =============================================================================
-# CUSTOMER METRICS
-# =============================================================================
-
   active_customers:
     formula: "count(distinct CustomerID)"
     owner: "Growth"
@@ -73,10 +58,6 @@ kpis:
     dimensions:
       - Country
       - CustomerType
-
-# =============================================================================
-# DERIVED REVENUE METRICS (depend on base metrics above)
-# =============================================================================
 
   revenue_per_order:
     formula: "total_revenue / order_count"
@@ -131,10 +112,6 @@ kpis:
       - ProductCategory
       - Country
 
-# =============================================================================
-# CUSTOMER BEHAVIOUR METRICS
-# =============================================================================
-
   repeat_customer_rate:
     formula: "count(distinct CustomerID with orders > 1) / active_customers"
     owner: "Retention"
@@ -160,10 +137,6 @@ kpis:
     dimensions:
       - Country
       - AcquisitionChannel
-
-# =============================================================================
-# PRODUCT METRICS
-# =============================================================================
 
   product_revenue_concentration:
     formula: "revenue_top_20_products / total_revenue"
@@ -191,14 +164,7 @@ kpis:
       - StockCode
       - Country
 
-# =============================================================================
-# GEOGRAPHIC METRICS
-# =============================================================================
-
   revenue_by_country:
-    # NOTE: group by syntax is not supported by the scalar formula parser.
-    # This KPI returns total revenue. Per-country breakdown is handled
-    # in Week 4 visualisations where a Series result is appropriate.
     formula: "sum(Quantity * UnitPrice)"
     owner: "International"
     cadence: "weekly"
@@ -222,10 +188,6 @@ kpis:
     dimensions:
       - Region
 
-# =============================================================================
-# TIME-BASED PATTERNS
-# =============================================================================
-
   weekend_revenue_share:
     formula: "sum(revenue where DayOfWeek in ['Saturday', 'Sunday']) / total_revenue"
     owner: "Operations"
@@ -245,10 +207,6 @@ kpis:
     business_context: "Operational capacity planning"
     thresholds:
       anomaly_sensitivity: 0.08
-
-# =============================================================================
-# METADATA & GOVERNANCE
-# =============================================================================
 
 metadata:
   data_source: "UK Retail Transactions Dataset"

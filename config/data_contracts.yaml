@@ -130,11 +130,7 @@ data_quality:
   freshness:
     max_delay: "24 hours"
     expected_update_frequency: "daily"
-
-# =============================================================================
-# PROCESSED DATA CONTRACTS
-# =============================================================================
-
+    
 processed_data:
   daily_kpis:
     description: "Daily aggregated KPI values"
