@@ -14,9 +14,9 @@ This project analyses real UK retail transaction data to automatically:
 
 ## Current Status
 
-**Phase:** Phase 7 In Progress  
-**Progress:** Full pipeline from raw data to AI-generated narratives, live dashboard, LLM observability, PostgreSQL migration complete, dbt transformation layer complete  
-**Next Up:** Power BI reporting layer, GitHub Actions CI/CD
+**Phase:** Phase 7 Complete  
+**Progress:** Full pipeline from raw data to AI-generated narratives, live dashboard, LLM observability, PostgreSQL migration, dbt transformation layer, Power BI reporting layer, and GitHub Actions CI/CD  
+**Next Up:** Phase 8 - AWS deployment (EC2, RDS, S3), FastAPI layer, live public URL
 
 ### Completed:
 - **Phase 1 - Foundation:** Project architecture and KPI specifications
@@ -53,13 +53,12 @@ This project analyses real UK retail transaction data to automatically:
   - RAG pipeline built with LangChain LCEL + ChromaDB + sentence-transformers - retrieves 3 similar historical anomalies before generating each narrative
   - AI Lab dashboard page surfaces monitoring stats, narrative comparison (standard vs RAG), and full prompt version history
   - TenantConfig path resolution layer - single-tenant now, multi-tenant ready
-- **Phase 7 - PostgreSQL + dbt (In Progress):**
+- **Phase 7 - PostgreSQL + dbt + Power BI + CI/CD (Complete):**
   - Migrated all pipeline outputs from CSV/JSON/JSONL to PostgreSQL 15 running in Docker
   - Built dbt transformation layer with staging, intermediate, and mart model layers
+  - Built 4-page Power BI report connected to the analytics schema via ODBC
+  - GitHub Actions CI/CD pipeline running dbt compile and schema tests on every push, pytest on every PR
   - See Phase 7 section below for full details
-
-### Currently Building:
-- Phase 7: Power BI reporting layer and GitHub Actions CI/CD
 
 ### Future Ideas (might add later):
 - AWS deployment (EC2, RDS, S3) with FastAPI layer and live public URL
@@ -118,25 +117,25 @@ The system has 7 layers that work together:
 
 ```
 Data Layer
-  ↓ Loads and validates CSV data
+  v Loads and validates CSV data
 
 KPI Layer
-  ↓ Calculates metrics from config files
+  v Calculates metrics from config files
 
 Detection Layer
-  ↓ Finds anomalies and trends statistically
+  v Finds anomalies and trends statistically
 
 Analysis Layer
-  ↓ Figures out why metrics changed
+  v Figures out why metrics changed
 
 AI Layer
-  ↓ Generates plain-English narratives with RAG context, logs every call
+  v Generates plain-English narratives with RAG context, logs every call
 
 Output Layer
-  ↓ Presents findings through Streamlit dashboard
+  v Presents findings through Streamlit dashboard
 
 Database + Transformation Layer
-  ↓ PostgreSQL stores all outputs; dbt builds clean mart tables for reporting
+  v PostgreSQL stores all outputs; dbt builds clean mart tables for reporting
 ```
 
 **Config-Driven Design** - metrics defined in YAML, not Python. Business logic is separate from implementation. Inspired by how dbt handles metric definitions.
@@ -145,7 +144,7 @@ Database + Transformation Layer
 
 ---
 
-## Phase 7: PostgreSQL + dbt
+## Phase 7: PostgreSQL + dbt + Power BI + CI/CD
 
 ### Architecture
 
@@ -153,7 +152,7 @@ Phase 7 replaces the flat-file outputs (CSV, JSON, JSONL) with a proper database
 
 ```
 data/raw/UK retail data.csv
-        ↓  scripts/migrate.py
+        v  scripts/migrate.py
 PostgreSQL (public schema)
   raw_transactions  - 541,909 rows
   kpi_results       - 22 aggregate rows
@@ -161,12 +160,18 @@ PostgreSQL (public schema)
   root_causes       - 77 dimensional driver rows
   llm_calls         - 76 monitored LLM calls
   narratives        - 38 generated narratives
-        ↓  dbt
+        v  dbt
 analytics schema (dbt-managed)
-  stg_transactions       - cleaned, filtered view (530,104 rows)
+  stg_transactions        - cleaned, filtered view (530,104 rows)
   int_weekly_transactions - weekly aggregates by country and product
   mart_weekly_kpis        - final weekly KPI time series (Power BI reads this)
   mart_anomaly_summary    - anomalies joined to top root cause driver (Power BI reads this)
+        v  Power BI
+4-page report
+  Executive Overview    - weekly revenue trend + headline KPI cards
+  Anomaly Monitor       - anomaly count by severity and KPI, anomaly detail table
+  Root Cause Analysis   - average root cause contribution by KPI, driver detail table
+  KPI Trends            - side-by-side weekly line charts for all 6 mart KPIs
 ```
 
 ### Why dbt
@@ -195,7 +200,7 @@ The dbt project lives in `ecommerce_analytics/` and is structured in three layer
 
 **Staging layer** (`models/staging/`)
 
-`stg_transactions` - a view over raw_transactions that casts types, renames columns for consistency, filters out returns (quantity ≤ 0) and zero-price records (unit_price ≤ 0), adds a computed `line_total` column (quantity × unit_price), and adds `week_start` (date truncated to the Monday of each week). Reduces 541,909 rows to 530,104 after filtering.
+`stg_transactions` - a view over raw_transactions that casts types, renames columns for consistency, filters out returns (quantity <= 0) and zero-price records (unit_price <= 0), adds a computed `line_total` column (quantity x unit_price), and adds `week_start` (date truncated to the Monday of each week). Reduces 541,909 rows to 530,104 after filtering.
 
 **Intermediate layer** (`models/intermediate/`)
 
@@ -203,7 +208,7 @@ The dbt project lives in `ecommerce_analytics/` and is structured in three layer
 
 **Mart layer** (`models/mart/`)
 
-`mart_weekly_kpis` - a table (materialised, not a view) that summarises the intermediate layer to the week grain only, collapsing across country and product. Produces 53 rows - one per week - with total_revenue, order_count, units_sold, active_customers, revenue_per_order, and revenue_per_customer. This is the primary table Power BI will read.
+`mart_weekly_kpis` - a table (materialised, not a view) that summarises the intermediate layer to the week grain only, collapsing across country and product. Produces 53 rows - one per week - with total_revenue, order_count, units_sold, active_customers, revenue_per_order, and revenue_per_customer. This is the primary table Power BI reads.
 
 `mart_anomaly_summary` - a table that joins the anomalies source table to root_causes, filtering to segment_rank = 1 to get the top driver per anomaly. Produces one row per anomaly enriched with the top contributing dimension, segment, and contribution_pct. This powers the anomaly drill-through pages in Power BI.
 
@@ -219,14 +224,36 @@ The dbt project lives in `ecommerce_analytics/` and is structured in three layer
 
 All 5 pass on the current dataset.
 
+### Power BI Report
+
+4-page report connected to the `analytics` schema in PostgreSQL via psqlODBC (ODBC connector). Reads from `mart_weekly_kpis` and `mart_anomaly_summary` using Import mode.
+
+**Page 1 - Executive Overview:** 3 KPI cards (total revenue, order count, active customers) and a weekly line chart of total_revenue across the full Dec 2010 to Dec 2011 period. The November 2011 pre-Christmas spike is clearly visible.
+
+**Page 2 - Anomaly Monitor:** Bar chart of anomaly count by severity (low/medium/high/critical), bar chart of anomaly count by KPI name, and a detail table showing anomaly_date, kpi_name, severity, average deviation_pct, top_dimension, and top_segment per anomaly.
+
+**Page 3 - Root Cause Analysis:** Bar chart of average top_contribution_pct by kpi_name showing which KPIs have the clearest dimensional attribution, and a detail table with the full driver breakdown per anomaly. Note: top_segment is dominated by United Kingdom across all anomalies, reflecting the dataset's composition (approximately 90% UK transactions). This is expected behaviour - the root cause engine is correctly identifying the dominant segment. In a more geographically balanced dataset, this page would surface more varied regional drivers.
+
+**Page 4 - KPI Trends:** Six side-by-side weekly line charts covering total_revenue, order_count, active_customers, revenue_per_customer, revenue_per_order, and units_sold. Designed to show cross-metric correlation - the November 2011 wholesale event is visible as a simultaneous spike across all six panels.
+
+### GitHub Actions CI/CD
+
+Two workflows in `.github/workflows/`:
+
+**dbt_ci.yml** - triggers on every push to any branch. Spins up a PostgreSQL 15 service container, installs dbt-postgres 1.9.0, creates a profiles.yml targeting the service container, runs `sql/init.sql` to initialise the schema, then runs `dbt deps`, `dbt compile`, and `dbt test --select source:*`. This validates SQL syntax across all models and runs all 5 source schema tests on every push.
+
+**python_ci.yml** - triggers on pull requests to main. Installs pytest and project dependencies, then runs `tests/` with verbose output.
+
+**tests/test_config.py** - 8 tests covering the kpis.yaml config file: valid YAML, correct structure, all KPIs have formula/owner/thresholds fields, anomaly_sensitivity values are valid floats between 0 and 1, metadata block exists, and all 6 core KPIs present in the mart tables are defined in config.
+
 ### Lineage Graph
 
 Running `dbt docs generate && dbt docs serve` produces a full documentation site including a visual lineage graph:
 
 ```
-public.raw_transactions ──→ stg_transactions ──→ int_weekly_transactions ──→ mart_weekly_kpis
-public.anomalies ──────────────────────────────────────────────────────→ mart_anomaly_summary
-public.root_causes ─────────────────────────────────────────────────────────────────────────↗
+public.raw_transactions --> stg_transactions --> int_weekly_transactions --> mart_weekly_kpis
+public.anomalies ----------------------------------------------------------------> mart_anomaly_summary
+public.root_causes --------------------------------------------------------------> mart_anomaly_summary
 ```
 
 Green nodes are source tables loaded by Python. Blue nodes are dbt-managed models. The graph makes the full data flow visible without reading any code.
@@ -234,19 +261,12 @@ Green nodes are source tables loaded by Python. Blue nodes are dbt-managed model
 ### Running dbt
 
 ```bash
-# Navigate to dbt project
 cd ecommerce_analytics
 
-# Run all models
 dbt run
-
-# Run tests
 dbt test
-
-# Generate and serve documentation
-dbt docs generate
-dbt docs serve
-# Then open http://localhost:8080
+dbt docs generate && dbt docs serve
+# Open docs at http://localhost:8080
 ```
 
 ---
@@ -255,6 +275,10 @@ dbt docs serve
 
 ```
 ecommerce-data-storytelling/
+├── .github/
+│   └── workflows/
+│       ├── dbt_ci.yml               # dbt compile + schema tests on every push
+│       └── python_ci.yml            # pytest on every PR
 ├── config/
 │   ├── kpis.yaml                    # 16 metric definitions (formula, owner, thresholds)
 │   ├── data_contracts.yaml          # Data validation rules and schema
@@ -288,18 +312,20 @@ ecommerce-data-storytelling/
 ├── ecommerce_analytics/             # dbt project
 │   ├── models/
 │   │   ├── staging/
-│   │   │   ├── stg_transactions.sql # Cleaned, filtered view over raw_transactions
-│   │   │   └── sources.yml          # Source definitions and data tests
+│   │   │   ├── stg_transactions.sql
+│   │   │   └── sources.yml          # Source definitions and 5 data tests
 │   │   ├── intermediate/
-│   │   │   └── int_weekly_transactions.sql  # Weekly aggregates by country and product
+│   │   │   └── int_weekly_transactions.sql
 │   │   └── mart/
-│   │       ├── mart_weekly_kpis.sql          # Final weekly KPI time series (Power BI)
-│   │       └── mart_anomaly_summary.sql      # Anomalies joined to top root cause driver
+│   │       ├── mart_weekly_kpis.sql
+│   │       └── mart_anomaly_summary.sql
 │   └── dbt_project.yml
 ├── sql/
 │   └── init.sql                     # PostgreSQL schema - 6 tables, indexes, 3 views
 ├── scripts/
 │   └── migrate.py                   # Idempotent migration from CSV/JSON/JSONL to Postgres
+├── tests/
+│   └── test_config.py               # 8 pytest tests covering kpis.yaml structure
 ├── data/
 │   ├── raw/
 │   │   └── UK retail data.csv       # 541,909 rows
@@ -368,9 +394,10 @@ streamlit run src/platforms/dashboard.py
 
 ```bash
 cd ecommerce_analytics
-dbt run          # Build all 4 models
-dbt test         # Run 5 data tests
-dbt docs generate && dbt docs serve  # Open docs at localhost:8080
+dbt run
+dbt test
+dbt docs generate && dbt docs serve
+# Open http://localhost:8080
 ```
 
 ---
@@ -386,9 +413,9 @@ dbt docs generate && dbt docs serve  # Open docs at localhost:8080
 **Insights** - The November 2011 event visualised as a normalised 4-KPI chart, with AI narrative summaries for each anomaly in the cluster.
 
 **AI Lab** - LLM observability and evaluation:
-- *Monitoring* - live stats for every API call (total calls, success rate, cost, latency, quality flags by prompt version)
-- *Narrative Comparison* - pick any anomaly and compare standard vs RAG narrative side by side with retrieved context documents shown
-- *Prompt Versions* - full template history from `config/prompts.yaml` with call counts, violation rates, and latency per version
+- Monitoring - live stats for every API call (total calls, success rate, cost, latency, quality flags by prompt version)
+- Narrative Comparison - pick any anomaly and compare standard vs RAG narrative side by side with retrieved context documents shown
+- Prompt Versions - full template history from `config/prompts.yaml` with call counts, violation rates, and latency per version
 
 ---
 
@@ -459,15 +486,15 @@ LLM narratives generated via Groq (free tier, Llama 3.1-8b-instant). Every call 
 
 RAG pipeline built with LangChain LCEL + ChromaDB + sentence-transformers. A cross-KPI retrieval bug caused hallucinations in the first run - fixed by adding `same_kpi_only=True` metadata filtering to ChromaDB retrieval. AI Lab dashboard page gives full visibility into monitoring stats, narrative comparison, and prompt version history.
 
-### Phase 7: PostgreSQL + dbt + Power BI + CI/CD 
+### Phase 7: PostgreSQL + dbt + Power BI + CI/CD (Complete)
 
-#### PostgreSQL migration 
+#### PostgreSQL migration
 Migrated all pipeline outputs to PostgreSQL 15 running in Docker. `scripts/migrate.py` is idempotent - it uses upsert logic for tables with unique constraints and accepts a `--reset` flag for tables without them (root_causes). Final verified counts: raw_transactions 541,909, kpi_results 22, anomalies 46, root_causes 77, llm_calls 76, narratives 38.
 
 The schema in `sql/init.sql` includes indexes on all query columns and three pre-built views: `vw_kpi_with_anomaly_flag`, `vw_llm_monitoring_summary`, and `vw_anomaly_clusters`.
 
-#### dbt transformation layer 
-Built a four-model dbt pipeline that replaces the Python pipeline's flat CSV outputs with SQL-computed mart tables. The three-layer architecture (staging → intermediate → mart) keeps cleaning, business logic, and reporting concerns cleanly separated.
+#### dbt transformation layer
+Built a four-model dbt pipeline that replaces the Python pipeline's flat CSV outputs with SQL-computed mart tables. The three-layer architecture (staging, intermediate, mart) keeps cleaning, business logic, and reporting concerns cleanly separated.
 
 The key design decision: the existing `kpi_results` table only stores 22 aggregate totals - one per pipeline run. The proper weekly KPI time series is computed by dbt directly from `raw_transactions` in SQL, producing 53 rows (one per week) in `mart_weekly_kpis`. This is the correct approach - the Python engine was always designed to hand off time-series computation to the database layer.
 
@@ -475,11 +502,17 @@ The key design decision: the existing `kpi_results` table only stores 22 aggrega
 
 5 data tests pass on every `dbt test` run, and `dbt docs generate` produces a full documentation site with a visual lineage graph.
 
-#### Power BI 
-Connect Power BI Desktop to the `analytics` schema in Postgres and build 3–4 page report reading from `mart_weekly_kpis` and `mart_anomaly_summary`.
+#### Power BI reporting layer
+Connected Power BI Desktop to the analytics schema via psqlODBC. Built a 4-page report reading from `mart_weekly_kpis` and `mart_anomaly_summary` in Import mode.
 
-#### GitHub Actions CI/CD 
-Automated `dbt test` on every push, Python tests on PR.
+The report surfaces the weekly revenue trend across the full dataset period, anomaly distribution by severity and KPI, root cause contribution by KPI, and side-by-side KPI trend lines for all 6 mart metrics. The November 2011 pre-Christmas wholesale event is visible as a correlated spike across all six KPI trend panels simultaneously.
+
+Known limitation: the root cause page is dominated by United Kingdom as the top segment across all anomalies. This reflects the dataset composition (approximately 90% UK transactions) rather than a reporting error. A more geographically balanced dataset would surface more varied regional drivers.
+
+#### GitHub Actions CI/CD
+Two workflows wired to the repository. `dbt_ci.yml` runs on every push - it spins up a PostgreSQL 15 service container, pins dbt-core and dbt-postgres to 1.9.0, creates a profiles.yml targeting the service container, initialises the schema from `sql/init.sql`, and runs `dbt compile` followed by `dbt test --select source:*`. `python_ci.yml` runs on every PR to main and executes the pytest suite in `tests/`.
+
+The dbt version pin matters: dbt-core 2.0.0-alpha.2 dropped postgres adapter support in favour of dbt Fusion. Pinning to 1.9.0 keeps the workflow stable.
 
 ### Phase 8 (Planned)
 AWS deployment - EC2, RDS, S3. FastAPI layer. Live public URL.
@@ -503,26 +536,29 @@ AWS deployment - EC2, RDS, S3. FastAPI layer. Live public URL.
 ## Tech Stack
 
 - Python 3.10+, Pandas, NumPy
-- SciPy & Statsmodels
+- SciPy and Statsmodels
 - PyYAML for config parsing
 - Streamlit, Plotly
 - Groq (Llama 3.1-8b-instant), LangChain, ChromaDB, sentence-transformers
 - PostgreSQL 15, Docker, psycopg2
-- dbt (dbt-postgres 1.10)
+- dbt (dbt-postgres 1.9.0)
+- Power BI Desktop (connected via psqlODBC)
 - Parquet (cache), JSONL (monitoring log)
 - pytest, black, ruff
+- GitHub Actions (CI/CD)
 - Git with conventional commits
 
 ---
 
 ## Known Issues / TODOs
 
-- No comprehensive test suite yet
+- No comprehensive test suite yet - current pytest coverage is limited to config validation
 - `new_customers` will equal `active_customers` on this dataset - we only have one year of data, so every customer's first order falls within the dataset period. In production you'd compare against a historical customer table.
 - `revenue_by_country` currently returns total revenue as a scalar. The actual per-country breakdown will be handled as a visualisation later.
 - Config YAML validation is basic - could add schema validation
 - Root cause contribution percentages can exceed 100% for the primary driver. This is not a calculation error - it happens when the dominant segment overperforms while other segments are simultaneously below their baseline. The number is mathematically correct but looks odd without that explanation.
 - RAG token counts are not captured for v2-rag calls - LangChain LCEL's pipe syntax doesn't return a usage object directly. Latency is captured correctly.
+- Power BI root cause page shows United Kingdom as the dominant segment for all anomalies, reflecting dataset composition rather than a reporting error.
 
 ---
 
@@ -541,6 +577,8 @@ This project is forcing me to think about things I didn't expect:
 - Observability first. You cannot evaluate an AI system you cannot observe. The monitoring layer needed to exist before the RAG layer, not after.
 - SQL is the right tool for aggregations at scale. Moving KPI time series computation from Python/pandas into dbt SQL reduced the problem to a clean GROUP BY and made the logic auditable, testable, and directly queryable - things you can't easily do with a pandas DataFrame saved to parquet.
 - Separation of concerns compounds. Having staging clean the data, intermediate apply business logic, and mart produce reporting-ready tables means each layer can be changed, tested, and documented independently. The lineage graph makes every dependency explicit.
+- CI/CD version pinning matters in practice. The dbt 2.0.0-alpha.2 pre-release silently broke postgres support - without an explicit version pin in the workflow, the pipeline would have failed unpredictably whenever a new pre-release shipped.
+- Power BI dominant-segment bias is a known limitation in dimensional root cause analysis. When one segment holds 90%+ of volume, contribution-weighted metrics will always surface it as the top driver regardless of whether it's actually anomalous. The fix is normalised contribution metrics that account for expected share, not raw contribution.
 
 ---
 
@@ -575,9 +613,11 @@ These are real bugs that appeared during the build and required actual diagnosis
 
 **Prompt violations caught by monitoring** - 8 out of 19 v1 narratives contained percentages, violating the explicit prompt instruction not to use them. I wouldn't have caught this by reading outputs manually - 8/19 is easy to miss when skimming. The monitoring layer flagged it automatically. The fix was tightening the v2 prompt wording, and the monitoring log confirmed the violation rate dropped from 42% to 0%.
 
-**Duplicate rows from repeated migration runs** - Running `migrate.py` multiple times without resetting the database produced 1,625,727 rows in raw_transactions (3 × 541,909) and 154 rows in root_causes (2 × 77). Caught by running a COUNT(*) verification query after each migration. Fixed by running `docker-compose down -v` to wipe the volume and re-migrating once cleanly. Led to adding explicit row count verification as a post-migration step.
+**Duplicate rows from repeated migration runs** - Running `migrate.py` multiple times without resetting the database produced 1,625,727 rows in raw_transactions (3 x 541,909) and 154 rows in root_causes (2 x 77). Caught by running a COUNT(*) verification query after each migration. Fixed by running `docker-compose down -v` to wipe the volume and re-migrating once cleanly. Led to adding explicit row count verification as a post-migration step.
 
 **dbt column name mismatch** - The initial `mart_anomaly_summary` model referenced `a.date` and `r.driver_1_dimension`, neither of which existed in the actual schema. The anomalies table uses `anomaly_date`, and root_causes stores drivers as individual rows with `dimension`, `segment_value`, and `segment_rank` columns rather than denormalised driver_1/driver_2/driver_3 columns. Caught by running `dbt run` and reading the Database Error output, then inspecting the actual schema with `\d anomalies` and `\d root_causes` in psql. Fixed by rewriting the mart model to filter `segment_rank = 1` and join on the correct column names.
+
+**dbt CI pre-release version conflict** - The initial GitHub Actions workflow pulled dbt-core 2.0.0-alpha.2 from PyPI, which dropped postgres adapter support in favour of dbt Fusion. The workflow failed immediately with an InvalidConfig error. Fixed by pinning both dbt-core and dbt-postgres explicitly to 1.9.0 in the install step. Pre-release packages on PyPI are installed by default when no version pin is specified, which makes explicit pinning essential for stable CI.
 
 ### What this taught me about working with AI tools
 
@@ -587,19 +627,19 @@ These are real bugs that appeared during the build and required actual diagnosis
 
 **AI accelerates implementation, not understanding.** The design decisions in this project - baseline windowing, ratio KPI flagging, JSONL for monitoring logs, TenantConfig for path resolution, dbt three-layer architecture - all came from thinking through the problem before writing code. AI generated the implementation quickly once the design was clear. Where I skipped the thinking step and let AI drive the design, the results needed more rework.
 
-**Verification is the job.** The KPI audit, the date axis debugging, the RAG hallucination diagnosis, the migration duplicate detection, the dbt schema mismatch - none of these were caught by AI. They were caught by running the system, looking at the output, and asking whether it was correct. That's the work that remains irreducibly human regardless of how good the code generation gets.
+**Verification is the job.** The KPI audit, the date axis debugging, the RAG hallucination diagnosis, the migration duplicate detection, the dbt schema mismatch, the CI version conflict - none of these were caught by AI. They were caught by running the system, looking at the output, and asking whether it was correct. That's the work that remains irreducibly human regardless of how good the code generation gets.
 
 ### What I can explain without AI assistance
 
-Every layer of this system. The statistical methods and why three were chosen. The formula parser and why check ordering matters. The baseline windowing decision and what happens if you get it wrong. The dimensional slicing approach and why ratio KPIs can't be segmented naively. The RAG architecture and the specific failure mode that caused the hallucination. The JSONL monitoring format and why it was chosen over a database. The dbt three-layer architecture and why mart models are materialised as tables while staging and intermediate are views. The lineage graph and what each dependency represents.
+Every layer of this system. The statistical methods and why three were chosen. The formula parser and why check ordering matters. The baseline windowing decision and what happens if you get it wrong. The dimensional slicing approach and why ratio KPIs can't be segmented naively. The RAG architecture and the specific failure mode that caused the hallucination. The JSONL monitoring format and why it was chosen over a database. The dbt three-layer architecture and why mart models are materialised as tables while staging and intermediate are views. The lineage graph and what each dependency represents. The CI version pinning issue and why pre-release packages break stable workflows.
 
 If an interviewer wants to walk through any part of this codebase, I can explain the design decisions, the tradeoffs, and what I would do differently.
 
 ---
 
-**Status:** Phase 7 In Progress - PostgreSQL migration complete, dbt transformation layer complete, Power BI and CI/CD next  
-**Next:** Power BI reporting layer, GitHub Actions CI/CD, then Phase 8 AWS deployment
+**Status:** Phase 7 Complete  
+**Next:** Phase 8 - AWS deployment (EC2, RDS, S3), FastAPI layer, live public URL
 
 *Second year CS student building this to understand how production analytics systems actually work. Building in phases rather than a fixed schedule - shipping each layer properly before moving to the next.*
 
-Last updated: April 2026
+Last updated: June 2026
